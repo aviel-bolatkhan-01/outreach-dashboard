@@ -358,12 +358,43 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
             return {"ok": False, "msg": "Pipeline already running"}
         def run_scrape():
             global _pipeline_proc, _pipeline_stage
+            import random as _random
+
             _pipeline_stage = "scraping"
             LIVE_LOG.write_text("")  # clear log
+
+            # Build query file — 25 queries
+            CITIES = [
+                ("Charlotte","NC"),("Atlanta","GA"),("Tampa","FL"),("Las Vegas","NV"),
+                ("Portland","OR"),("Minneapolis","MN"),("San Diego","CA"),("Detroit","MI"),
+                ("Baltimore","MD"),("Raleigh","NC"),("Phoenix","AZ"),("Sacramento","CA"),
+                ("Kansas City","MO"),("Columbus","OH"),("Indianapolis","IN"),
+                ("Louisville","KY"),("Memphis","TN"),("Richmond","VA"),
+                ("Oklahoma City","OK"),("Salt Lake City","UT"),
+            ]
+            CATEGORIES = [
+                "dental clinic","law firm","med spa","real estate agent",
+                "insurance agency","HVAC contractor","roofing contractor",
+                "chiropractor","physical therapist","veterinary clinic",
+                "auto repair shop","plumber","mortgage broker","accounting firm",
+            ]
+            pairs = [(city, state, cat) for city, state in CITIES for cat in CATEGORIES]
+            _random.shuffle(pairs)
+            queries = [f"{cat} in {city} {state}" for city, state, cat in pairs[:25]]
+            queries_path = LEADS_DIR / "daily_queries.txt"
+            queries_path.write_text("\n".join(queries))
+
+            raw_csv = LEADS_DIR / "leads_raw_new.csv"
+            if raw_csv.exists():
+                raw_csv.unlink()
+
+            # Run scrape_maps.py DIRECTLY — captures all its print() output
             _pipeline_proc = subprocess.Popen(
-                [PYTHON, str(PIPELINE)],
+                [PYTHON, str(LEADS_DIR / "scrape_maps.py"),
+                 "--queries", str(queries_path),
+                 "--output",  str(raw_csv)],
                 cwd=str(LEADS_DIR),
-                env={**os.environ},
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True, bufsize=1
@@ -371,9 +402,20 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
             t = threading.Thread(target=_stream_proc_to_log, args=(_pipeline_proc, LIVE_LOG), daemon=True)
             t.start()
             _pipeline_proc.wait()
+
+            # Count results
+            count = 0
+            if raw_csv.exists():
+                try:
+                    with open(raw_csv) as f:
+                        count = max(0, sum(1 for _ in f) - 1)
+                except: pass
+            with open(LIVE_LOG, "a") as f:
+                f.write(f"\n✅ Scrape complete — {count} businesses found\n")
+
             _pipeline_stage = "idle"
         background_tasks.add_task(run_scrape)
-        return {"ok": True, "msg": "Pipeline started"}
+        return {"ok": True, "msg": "Scraping 25 queries — watch the terminal"}
 
     if action == "send":
         if pipeline_running():
@@ -385,6 +427,7 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
             send_script = str(LEADS_DIR / "send_emails_batch_475.py")
             _pipeline_proc = subprocess.Popen(
                 [PYTHON, send_script], cwd=str(LEADS_DIR),
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1
             )
@@ -546,26 +589,48 @@ def get_logs(lines: int = 200):
 # ── API: GITHUB SYNC ───────────────────────────────────────────────
 @app.post("/api/sync")
 def sync_github():
+    msgs = []
+    errors = []
+
+    # 1. Sync leads data → private outreach-data repo
     try:
-        # Git add + commit + push from leads dir
-        result = subprocess.run(
-            ["git", "add", "emails_generated.csv", "sent_log.csv"],
-            cwd=str(LEADS_DIR), capture_output=True, text=True
-        )
-        result2 = subprocess.run(
-            ["git", "commit", "-m", f"data: sync {date.today()}"],
-            cwd=str(LEADS_DIR), capture_output=True, text=True
-        )
-        result3 = subprocess.run(
-            ["git", "push", "origin", "main"],
-            cwd=str(LEADS_DIR), capture_output=True, text=True
-        )
-        return {
-            "ok": True,
-            "msg": result3.stdout or result3.stderr or "Pushed"
-        }
+        subprocess.run(["git", "add", "emails_generated.csv", "sent_log.csv", "replies_log.csv"],
+                       cwd=str(LEADS_DIR), capture_output=True)
+        r = subprocess.run(["git", "commit", "-m", f"data: sync {date.today()}"],
+                           cwd=str(LEADS_DIR), capture_output=True, text=True)
+        if "nothing to commit" in r.stdout + r.stderr:
+            msgs.append("Data: no changes")
+        else:
+            r2 = subprocess.run(["git", "push", "origin", "main"],
+                                 cwd=str(LEADS_DIR), capture_output=True, text=True)
+            if r2.returncode == 0:
+                msgs.append("Data pushed → outreach-data (private)")
+            else:
+                errors.append(f"Data push: {r2.stderr.strip()[:120]}")
     except Exception as e:
-        return {"ok": False, "msg": str(e)}
+        errors.append(f"Data sync: {e}")
+
+    # 2. Sync dashboard code → outreach-dashboard repo
+    dashboard_dir = Path(__file__).parent
+    try:
+        subprocess.run(["git", "add", "-A"], cwd=str(dashboard_dir), capture_output=True)
+        r = subprocess.run(["git", "commit", "-m", f"dashboard: sync {date.today()}"],
+                           cwd=str(dashboard_dir), capture_output=True, text=True)
+        if "nothing to commit" in r.stdout + r.stderr:
+            msgs.append("Dashboard: no changes")
+        else:
+            r2 = subprocess.run(["git", "push", "origin", "main"],
+                                 cwd=str(dashboard_dir), capture_output=True, text=True)
+            if r2.returncode == 0:
+                msgs.append("Dashboard pushed → outreach-dashboard")
+            else:
+                errors.append(f"Dashboard push: {r2.stderr.strip()[:120]}")
+    except Exception as e:
+        errors.append(f"Dashboard sync: {e}")
+
+    if errors:
+        return {"ok": False, "msg": " | ".join(errors)}
+    return {"ok": True, "msg": " | ".join(msgs) or "All synced"}
 
 # ── SERVE FRONTEND ────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="static"), name="static")
