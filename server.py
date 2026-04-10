@@ -5,14 +5,14 @@ Serves dashboard UI + API for controlling the email pipeline
 Run: python3 server.py
 Open: http://localhost:5050
 """
-import csv, json, os, re, subprocess, sys, time, threading
+import asyncio, csv, json, os, re, subprocess, sys, time, threading
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 import requests
@@ -88,12 +88,23 @@ def load_sent_set():
 _pipeline_proc  = None
 _pipeline_stage = "idle"
 _pipeline_lock  = threading.Lock()
+LIVE_LOG        = Path("/tmp/pipeline_live.log")
 
 def pipeline_running():
     global _pipeline_proc
     if _pipeline_proc and _pipeline_proc.poll() is None:
         return True
     return False
+
+def _stream_proc_to_log(proc, log_path: Path):
+    """Background thread: read subprocess stdout line-by-line → write to log file."""
+    try:
+        with open(log_path, "a", buffering=1, encoding="utf-8") as f:
+            for line in iter(proc.stdout.readline, ""):
+                f.write(line)
+                f.flush()
+    except Exception:
+        pass
 
 # ── GROQ EMAIL GENERATION ─────────────────────────────────────────
 PLAYBOOK = {
@@ -346,13 +357,19 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
         if pipeline_running():
             return {"ok": False, "msg": "Pipeline already running"}
         def run_scrape():
-            global _pipeline_stage
+            global _pipeline_proc, _pipeline_stage
             _pipeline_stage = "scraping"
+            LIVE_LOG.write_text("")  # clear log
             _pipeline_proc = subprocess.Popen(
                 [PYTHON, str(PIPELINE)],
                 cwd=str(LEADS_DIR),
-                env={**os.environ}
+                env={**os.environ},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True, bufsize=1
             )
+            t = threading.Thread(target=_stream_proc_to_log, args=(_pipeline_proc, LIVE_LOG), daemon=True)
+            t.start()
             _pipeline_proc.wait()
             _pipeline_stage = "idle"
         background_tasks.add_task(run_scrape)
@@ -362,11 +379,17 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
         if pipeline_running():
             return {"ok": False, "msg": "Pipeline already running"}
         def run_send():
-            global _pipeline_stage
+            global _pipeline_proc, _pipeline_stage
             _pipeline_stage = "sending"
-            # Run just the send portion via a minimal script
+            LIVE_LOG.write_text("")
             send_script = str(LEADS_DIR / "send_emails_batch_475.py")
-            _pipeline_proc = subprocess.Popen([PYTHON, send_script], cwd=str(LEADS_DIR))
+            _pipeline_proc = subprocess.Popen(
+                [PYTHON, send_script], cwd=str(LEADS_DIR),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1
+            )
+            t = threading.Thread(target=_stream_proc_to_log, args=(_pipeline_proc, LIVE_LOG), daemon=True)
+            t.start()
             _pipeline_proc.wait()
             _pipeline_stage = "idle"
         background_tasks.add_task(run_send)
@@ -453,6 +476,72 @@ def approval_status():
         "pending_count": pending,
         "approved": APPROVAL_FILE.exists(),
     }
+
+# ── API: LIVE LOG STREAM (SSE) ────────────────────────────────────
+@app.get("/api/stream")
+async def stream_logs():
+    """Server-Sent Events: tail pipeline_live.log and push new lines."""
+    async def generator():
+        pos = 0
+        idle_ticks = 0
+        max_idle = 120  # 60s with 0.5s sleep
+        yield f"data: {json.dumps({'line': '--- Stream connected ---', 'type': 'info'})}\n\n"
+        while True:
+            await asyncio.sleep(0.5)
+            if LIVE_LOG.exists():
+                try:
+                    with open(LIVE_LOG, "r", encoding="utf-8") as f:
+                        f.seek(pos)
+                        new_data = f.read()
+                        pos = f.tell()
+                    if new_data:
+                        idle_ticks = 0
+                        for line in new_data.splitlines():
+                            line = line.strip()
+                            if not line:
+                                continue
+                            ltype = "info"
+                            if "error" in line.lower() or "❌" in line:
+                                ltype = "err"
+                            elif "✅" in line or "done" in line.lower():
+                                ltype = "ok"
+                            elif "found:" in line or "total:" in line:
+                                ltype = "progress"
+                            yield f"data: {json.dumps({'line': line, 'type': ltype})}\n\n"
+                    else:
+                        idle_ticks += 1
+                except Exception:
+                    pass
+            else:
+                idle_ticks += 1
+
+            if not pipeline_running():
+                idle_ticks += 1
+
+            if idle_ticks >= max_idle:
+                yield f"data: {json.dumps({'line': '--- Stream ended ---', 'type': 'info', 'done': True})}\n\n"
+                break
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
+@app.get("/api/logs")
+def get_logs(lines: int = 200):
+    """Return last N lines of the live log."""
+    if not LIVE_LOG.exists():
+        return {"lines": []}
+    try:
+        all_lines = LIVE_LOG.read_text(encoding="utf-8").splitlines()
+        return {"lines": all_lines[-lines:]}
+    except Exception:
+        return {"lines": []}
 
 # ── API: GITHUB SYNC ───────────────────────────────────────────────
 @app.post("/api/sync")
