@@ -5,897 +5,608 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Outreach Dashboard</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0F0F13;--card:#1A1A20;--card2:#242430;--border:#2E2E3A;
+  --text:#EDEDEC;--muted:#A8A8A4;--dim:#737373;
+  --gold:#E0A860;--gold-dim:#C4842A;--gold-glow:rgba(224,168,96,.18);
+  --green:#4CAF7D;--red:#E05555;--blue:#5588E0;--r:10px;
+}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
 
-  :root {
-    --bg: #0F0F13;
-    --card: #1A1A20;
-    --card2: #242430;
-    --border: #2E2E3A;
-    --text: #EDEDEC;
-    --muted: #A8A8A4;
-    --dim: #737373;
-    --gold: #E0A860;
-    --gold-dim: #C4842A;
-    --green: #4CAF7D;
-    --red: #E05555;
-    --blue: #5588E0;
-    --radius: 10px;
-  }
+/* TOP BAR */
+#top-bar{height:3px;background:var(--card2);position:fixed;top:0;left:0;right:0;z-index:300}
+#top-bar-fill{height:100%;background:var(--gold);width:0%;transition:width 1s ease}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    min-height: 100vh;
-  }
+/* HEADER */
+header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:3px;z-index:100}
+header h1{font-size:17px;font-weight:800;color:var(--gold);flex:1}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--red);flex-shrink:0}
+.dot.on{background:var(--green);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-meta{font-size:11px;color:var(--dim)}
 
-  /* ── HEADER ── */
-  header {
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
+/* BUTTONS */
+.btn{padding:7px 15px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s,transform .1s}
+.btn:hover:not(:disabled){opacity:.85}.btn:active:not(:disabled){transform:scale(.97)}.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn-gold{background:var(--gold);color:#1A1100}.btn-green{background:var(--green);color:#0A1F14}
+.btn-red{background:var(--red);color:#fff}.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-blue{background:var(--blue);color:#fff}.btn-sm{padding:5px 11px;font-size:12px;border-radius:6px}
 
-  header h1 {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--gold);
-    flex: 1;
-  }
+/* LAYOUT */
+main{max-width:1380px;margin:0 auto;padding:20px 24px}
 
-  .status-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: var(--red);
-    transition: background 0.3s;
-  }
-  .status-dot.running { background: var(--green); animation: pulse 1.5s infinite; }
+/* APPROVAL GATE */
+#approval-gate{background:linear-gradient(135deg,#1A1500,#1F1A00);border:1px solid var(--gold-dim);border-radius:var(--r);padding:20px 24px;margin-bottom:20px;display:none}
+#approval-gate.visible{display:block}
+.gate-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.gate-badge{background:var(--gold);color:#1A1100;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px}
+.gate-title{font-size:16px;font-weight:700;color:var(--gold)}
+.gate-sub{font-size:13px;color:var(--muted);margin-top:2px}
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
+/* FORMAT SELECTOR */
+.format-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.format-card{flex:0 0 200px;background:var(--card2);border:2px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:border-color .2s,box-shadow .2s;user-select:none}
+.format-card:hover{border-color:var(--gold-dim)}
+.format-card.selected{border-color:var(--gold);box-shadow:0 0 16px var(--gold-glow)}
+.format-name{font-size:12px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.format-preview{font-size:11px;color:var(--muted);line-height:1.55}
 
-  .status-label {
-    font-size: 12px;
-    color: var(--muted);
-    min-width: 60px;
-  }
+/* SAMPLE PREVIEWS */
+.sample-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:900px){.sample-grid{grid-template-columns:1fr}}
+.sample-card{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:14px}
+.sample-biz{font-size:11px;color:var(--dim);margin-bottom:4px}
+.sample-cat{display:inline-block;background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:10px;color:var(--muted);margin-bottom:8px}
+.sample-subj{font-weight:700;font-size:13px;color:var(--gold);margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.sample-body{font-size:12px;color:var(--text);white-space:pre-wrap;line-height:1.6;max-height:120px;overflow-y:auto}
 
-  /* ── BUTTONS ── */
-  .btn {
-    padding: 8px 16px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    transition: opacity 0.15s, transform 0.1s;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn:active { transform: scale(0.97); }
-  .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+.gate-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.gate-hint{font-size:12px;color:var(--dim);font-style:italic}
 
-  .btn-gold { background: var(--gold); color: #1A1100; }
-  .btn-green { background: var(--green); color: #0A1F14; }
-  .btn-red { background: var(--red); color: #fff; }
-  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-  .btn-blue { background: var(--blue); color: #fff; }
-  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.stat-group{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--r);padding:16px 18px;transition:transform .2s,box-shadow .2s}
+.stat-group:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.stat-group-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.stat-label{font-size:12px;color:var(--muted)}
+.stat-val{font-size:20px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums}
+.stat-val.sm{font-size:15px}
 
-  /* ── MAIN ── */
-  main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+/* CHART */
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:18px}
+.chart-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:14px}
+.chart-bars{display:flex;align-items:flex-end;gap:6px;height:80px}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%}
+.chart-bar{width:100%;background:var(--gold);border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;position:relative}
+.chart-bar:hover::after{content:attr(data-val);position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;white-space:nowrap;color:var(--text)}
+.chart-day{font-size:10px;color:var(--dim)}
 
-  /* ── STATS ── */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-  }
+/* PIPELINE BAR */
+.pipeline-bar{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.stage-txt{flex:1;font-size:12px;color:var(--muted);font-style:italic}
 
-  .stat-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    text-align: center;
-  }
+/* ACTIVITY LOG */
+.log-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:18px;overflow:hidden}
+.log-hdr{padding:9px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer}
+.log-hdr .tog{margin-left:auto;color:var(--dim);font-size:12px}
+#log-entries{max-height:110px;overflow-y:auto;padding:4px 0}
+.log-line{padding:3px 16px;font-size:12px;color:var(--muted);display:flex;gap:10px}
+.log-t{color:var(--dim);flex-shrink:0;font-variant-numeric:tabular-nums;font-size:11px}
+.log-m.ok{color:var(--green)}.log-m.run{color:var(--gold)}.log-m.err{color:var(--red)}
 
-  .stat-val {
-    font-size: 32px;
-    font-weight: 800;
-    color: var(--gold);
-    line-height: 1;
-    margin-bottom: 6px;
-  }
+/* TABS */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tab-btn{padding:9px 18px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
+.tab-panel{display:none}.tab-panel.active{display:block}
 
-  .stat-lbl {
-    font-size: 12px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
+/* SEARCH */
+.search-row{display:flex;gap:10px;margin-bottom:14px;align-items:center}
+.search-inp{flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 14px;color:var(--text);font-size:14px;outline:none;transition:border-color .15s}
+.search-inp:focus{border-color:var(--gold)}.search-inp::placeholder{color:var(--dim)}
 
-  /* ── PIPELINE CONTROLS ── */
-  .pipeline-bar {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-  }
+/* EMAIL CARDS */
+.queue-grid{display:flex;flex-direction:column;gap:10px}
+.email-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;transition:transform .2s,box-shadow .2s,border-color .2s}
+.email-card:hover{transform:translateY(-1px);box-shadow:0 4px 18px rgba(0,0,0,.35);border-color:var(--gold-dim)}
+.card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.card-name{font-size:15px;font-weight:700;flex:1}
+.tag{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--muted)}
+.card-email{font-size:11px;color:var(--dim);margin-top:3px}
+.email-subj{font-weight:700;font-size:13px;color:var(--gold);margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.email-body{font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.65;max-height:180px;overflow-y:auto;scrollbar-width:thin;margin-bottom:10px}
+.card-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
-  .pipeline-bar .stage-text {
-    flex: 1;
-    font-size: 13px;
-    color: var(--muted);
-    font-style: italic;
-  }
+/* VARIANTS */
+.variants-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;border-top:1px solid var(--border);padding-top:10px}
+@media(max-width:860px){.variants-grid{grid-template-columns:1fr}}
+.v-card{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px;transition:border-color .15s}
+.v-card:hover{border-color:var(--gold-dim)}
+.v-label{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--gold);text-transform:uppercase}
+.v-subj{font-weight:700;font-size:12px;color:var(--text)}
+.v-body{font-size:12px;color:var(--muted);white-space:pre-wrap;line-height:1.6;max-height:130px;overflow-y:auto;flex:1}
 
-  /* ── TABS ── */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 20px;
-  }
+/* ALL TABLE */
+.all-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.all-tbl th{text-align:left;padding:9px 12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);background:var(--card);font-size:10px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0}
+.all-tbl td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text)}
+.all-tbl tr:hover td{background:var(--card2);cursor:pointer}
+.badge{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.badge-s{background:rgba(76,175,125,.15);color:var(--green)}
+.badge-q{background:rgba(224,168,96,.12);color:var(--gold)}
+.cell-t{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  .tab-btn {
-    padding: 10px 20px;
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    transition: color 0.15s, border-color 0.15s;
-  }
+/* SENT TABLE */
+.sent-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.sent-tbl th{text-align:left;padding:9px 14px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);background:var(--card);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.sent-tbl td{padding:8px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+.sent-tbl tr.exp:hover td{background:var(--card2);cursor:pointer}
+.detail-td{padding:0!important}
+.detail-inner{padding:0 14px 14px;background:var(--card2)}
+.detail-subj{font-weight:700;color:var(--gold);font-size:13px;padding-top:10px;margin-bottom:5px}
+.detail-body{font-size:12px;color:var(--text);white-space:pre-wrap;line-height:1.6;max-height:180px;overflow-y:auto}
 
-  .tab-btn.active {
-    color: var(--gold);
-    border-bottom-color: var(--gold);
-  }
+/* PAGINATION */
+.pag{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:center}
+.pag-info{font-size:12px;color:var(--muted);min-width:120px;text-align:center}
 
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
+/* SPINNER */
+.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
 
-  /* ── SEARCH ── */
-  .search-row {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
-    align-items: center;
-  }
+/* TOAST */
+#toasts{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:7px;z-index:9999}
+.toast{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 15px;font-size:13px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,.4);animation:sli .2s ease;max-width:300px}
+.toast.s{border-left:3px solid var(--green)}.toast.e{border-left:3px solid var(--red)}.toast.i{border-left:3px solid var(--gold)}
+@keyframes sli{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}
 
-  .search-input {
-    flex: 1;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 9px 14px;
-    color: var(--text);
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
-  .search-input:focus { border-color: var(--gold); }
-  .search-input::placeholder { color: var(--dim); }
-
-  /* ── QUEUE ── */
-  .queue-list { display: flex; flex-direction: column; gap: 8px; }
-
-  .queue-item {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    transition: border-color 0.15s;
-  }
-
-  .queue-item:hover { border-color: var(--gold-dim); }
-
-  .queue-header {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-    cursor: pointer;
-    gap: 12px;
-    user-select: none;
-  }
-
-  .queue-name {
-    font-weight: 700;
-    font-size: 15px;
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .queue-meta {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .queue-tag {
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .queue-expand-icon {
-    color: var(--dim);
-    font-size: 12px;
-    transition: transform 0.2s;
-  }
-
-  .queue-item.expanded .queue-expand-icon { transform: rotate(180deg); }
-
-  .queue-body {
-    display: none;
-    padding: 0 16px 16px;
-    border-top: 1px solid var(--border);
-  }
-
-  .queue-item.expanded .queue-body { display: block; }
-
-  .email-preview {
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    margin: 12px 0;
-  }
-
-  .email-subject {
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--gold);
-    margin-bottom: 8px;
-  }
-
-  .email-body-text {
-    font-size: 13px;
-    color: var(--text);
-    white-space: pre-wrap;
-    line-height: 1.6;
-  }
-
-  .queue-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  /* ── VARIANTS ── */
-  .variants-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin: 12px 0;
-  }
-
-  @media (max-width: 900px) {
-    .variants-grid { grid-template-columns: 1fr; }
-  }
-
-  .variant-card {
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .variant-label {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: var(--gold);
-    text-transform: uppercase;
-  }
-
-  .variant-subject {
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--text);
-  }
-
-  .variant-body {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: pre-wrap;
-    line-height: 1.6;
-    flex: 1;
-  }
-
-  .spinner {
-    display: inline-block;
-    width: 18px; height: 18px;
-    border: 2px solid var(--border);
-    border-top-color: var(--gold);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    vertical-align: middle;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── SENT TABLE ── */
-  .sent-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  .sent-table th {
-    text-align: left;
-    padding: 10px 14px;
-    color: var(--muted);
-    font-weight: 600;
-    border-bottom: 1px solid var(--border);
-    background: var(--card);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .sent-table td {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .sent-table tr:hover td { background: var(--card2); }
-
-  /* ── PAGINATION ── */
-  .pagination {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 16px;
-    justify-content: center;
-  }
-
-  .page-info {
-    font-size: 13px;
-    color: var(--muted);
-    min-width: 100px;
-    text-align: center;
-  }
-
-  /* ── TOAST ── */
-  #toast-container {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 9999;
-  }
-
-  .toast {
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 18px;
-    font-size: 13px;
-    color: var(--text);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    animation: slideIn 0.2s ease;
-    max-width: 320px;
-  }
-
-  .toast.success { border-left: 3px solid var(--green); }
-  .toast.error { border-left: 3px solid var(--red); }
-  .toast.info { border-left: 3px solid var(--gold); }
-
-  @keyframes slideIn {
-    from { transform: translateX(20px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-
-  /* ── EMPTY STATE ── */
-  .empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--muted);
-    font-size: 15px;
-  }
-
-  .empty-state span { font-size: 36px; display: block; margin-bottom: 12px; }
-
-  /* ── LOADING ── */
-  .loading-row {
-    text-align: center;
-    padding: 40px;
-    color: var(--muted);
-  }
+/* MISC */
+.empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:15px}
+.empty span{font-size:30px;display:block;margin-bottom:10px}
+.loading{text-align:center;padding:36px;color:var(--muted)}
 </style>
 </head>
 <body>
 
+<div id="top-bar"><div id="top-bar-fill"></div></div>
+
 <header>
   <h1>📧 Outreach Dashboard</h1>
-  <div class="status-dot" id="status-dot"></div>
-  <span class="status-label" id="status-label">Idle</span>
-  <button class="btn btn-ghost" onclick="syncGithub()">⬆ Sync GitHub</button>
+  <div class="dot" id="hdot"></div>
+  <span class="hdr-meta" id="hlbl">Idle</span>
+  <span class="hdr-meta" id="hage"></span>
+  <button class="btn btn-ghost btn-sm" onclick="syncGithub()">⬆ Sync</button>
 </header>
 
 <main>
-  <!-- STATS -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="stat-val" id="stat-collected">—</div>
-      <div class="stat-lbl">Total Collected</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="stat-sent">—</div>
-      <div class="stat-lbl">Total Sent</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="stat-pending">—</div>
-      <div class="stat-lbl">Queued (Ready)</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" id="stat-today">—</div>
-      <div class="stat-lbl">Sent Today</div>
+
+<!-- APPROVAL GATE -->
+<div id="approval-gate">
+  <div class="gate-header">
+    <span class="gate-badge" id="gate-count">0 emails</span>
+    <div>
+      <div class="gate-title">✉ Ready to Send — Choose a Format First</div>
+      <div class="gate-sub">Pick the writing style you like, review samples, then approve.</div>
     </div>
   </div>
 
-  <!-- PIPELINE CONTROLS -->
-  <div class="pipeline-bar">
-    <button class="btn btn-green" id="btn-scrape" onclick="pipelineAction('scrape')">▶ Scrape New Leads</button>
-    <button class="btn btn-gold" id="btn-send" onclick="pipelineAction('send')">📤 Send 450 Emails</button>
-    <button class="btn btn-red btn-sm" id="btn-stop" onclick="pipelineAction('stop')">⏹ Stop</button>
-    <span class="stage-text" id="stage-text">Ready</span>
-  </div>
-
-  <!-- TABS -->
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('queue', this)">📋 Queue</button>
-    <button class="tab-btn" onclick="switchTab('sent', this)">✉ Sent History</button>
-  </div>
-
-  <!-- QUEUE TAB -->
-  <div id="tab-queue" class="tab-panel active">
-    <div class="search-row">
-      <input class="search-input" type="text" id="search-input" placeholder="Search by business name, category, city…" oninput="debounceSearch()">
-      <span id="queue-count" style="color:var(--muted);font-size:12px;white-space:nowrap;"></span>
+  <!-- Format cards -->
+  <div class="format-row" id="format-row">
+    <div class="format-card" data-fid="professional" onclick="selectFormat(this)">
+      <div class="format-name">Professional</div>
+      <div class="format-preview">Hey [Business], noticed you're a top-rated dental clinic in Nashville. Many practices lose revenue to appointment no-shows — I built an AI that reduces them by 40%. Worth a quick chat? — Aviel</div>
     </div>
-    <div id="queue-list" class="queue-list">
-      <div class="loading-row"><span class="spinner"></span></div>
+    <div class="format-card" data-fid="casual" onclick="selectFormat(this)">
+      <div class="format-name">Casual</div>
+      <div class="format-preview">Hey [Business]! Quick question — do patients still ghost you after booking? I helped a clinic in Austin cut no-shows in half with an AI reminder system. Happy to show you how. — Aviel</div>
     </div>
-    <div class="pagination" id="queue-pagination" style="display:none">
-      <button class="btn btn-ghost btn-sm" id="queue-prev" onclick="queueChangePage(-1)">← Prev</button>
-      <span class="page-info" id="queue-page-info"></span>
-      <button class="btn btn-ghost btn-sm" id="queue-next" onclick="queueChangePage(1)">Next →</button>
+    <div class="format-card" data-fid="story" onclick="selectFormat(this)">
+      <div class="format-name">Story-Led</div>
+      <div class="format-preview">Hey [Business], a dental office in Denver was losing $8k/month to no-shows. We built them an AI follow-up system — first month: 60% fewer gaps. Think something similar could work for you? — Aviel</div>
+    </div>
+    <div class="format-card" data-fid="pain" onclick="selectFormat(this)">
+      <div class="format-name">Pain-First</div>
+      <div class="format-preview">Hey [Business], empty appointment slots and patients who don't show up — that's real lost revenue every week. I build AI systems that fix this automatically. Saw your reviews — you're clearly the real deal. — Aviel</div>
+    </div>
+    <div class="format-card" data-fid="direct" onclick="selectFormat(this)">
+      <div class="format-name">Direct</div>
+      <div class="format-preview">Hey [Business], I build AI automation for dental clinics. Specifically: patient intake, reminders, and reactivation. Takes 2 weeks to set up. Check what I've built: aviel-bolatkhan-01.github.io — Aviel</div>
     </div>
   </div>
 
-  <!-- SENT TAB -->
-  <div id="tab-sent" class="tab-panel">
-    <div id="sent-content">
-      <div class="loading-row"><span class="spinner"></span></div>
-    </div>
-    <div class="pagination" id="sent-pagination" style="display:none">
-      <button class="btn btn-ghost btn-sm" id="sent-prev" onclick="sentChangePage(-1)">← Prev</button>
-      <span class="page-info" id="sent-page-info"></span>
-      <button class="btn btn-ghost btn-sm" id="sent-next" onclick="sentChangePage(1)">Next →</button>
-    </div>
+  <!-- 3 sample email previews -->
+  <div class="sample-grid" id="sample-grid">
+    <div class="loading"><span class="spin"></span></div>
   </div>
+
+  <div class="gate-actions">
+    <button class="btn btn-gold" id="approve-btn" disabled onclick="approveBatch()">
+      ✓ Approve &amp; Send <span id="approve-count">0</span> Emails
+    </button>
+    <span class="gate-hint" id="gate-hint">← Select a format first</span>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-grid">
+  <div class="stat-group">
+    <div class="stat-group-title">Today</div>
+    <div class="stat-row"><span class="stat-label">Sent</span><span class="stat-val" id="s-today">—</span></div>
+    <div class="stat-row"><span class="stat-label">Daily limit</span><span class="stat-val sm">/ 450</span></div>
+  </div>
+  <div class="stat-group">
+    <div class="stat-group-title">This Week</div>
+    <div class="stat-row"><span class="stat-label">Sent</span><span class="stat-val" id="s-week">—</span></div>
+    <div class="stat-row"><span class="stat-label">Avg / day</span><span class="stat-val sm" id="s-avg">—</span></div>
+  </div>
+  <div class="stat-group">
+    <div class="stat-group-title">All Time</div>
+    <div class="stat-row"><span class="stat-label">Total sent</span><span class="stat-val" id="s-total">—</span></div>
+    <div class="stat-row"><span class="stat-label">Collected</span><span class="stat-val sm" id="s-coll">—</span></div>
+    <div class="stat-row"><span class="stat-label">Queued</span><span class="stat-val sm" id="s-pend">—</span></div>
+  </div>
+</div>
+
+<!-- BAR CHART -->
+<div class="chart-wrap">
+  <div class="chart-title">📊 Emails Sent — Last 14 Days</div>
+  <div class="chart-bars" id="chart-bars"><div class="loading"><span class="spin"></span></div></div>
+</div>
+
+<!-- PIPELINE CONTROLS -->
+<div class="pipeline-bar">
+  <button class="btn btn-green btn-sm" id="btn-scrape" onclick="pipelineAction('scrape')">▶ Scrape Leads</button>
+  <button class="btn btn-gold btn-sm" id="btn-send" onclick="pipelineAction('send')">📤 Send Now</button>
+  <button class="btn btn-red btn-sm" onclick="pipelineAction('stop')">⏹ Stop</button>
+  <span class="stage-txt" id="stage-txt">Ready</span>
+</div>
+
+<!-- ACTIVITY LOG -->
+<div class="log-wrap">
+  <div class="log-hdr" onclick="toggleLog()">
+    ⚡ Activity Log <span class="tog" id="log-tog">▾</span>
+  </div>
+  <div id="log-entries"></div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('queue',this)">📋 Queue</button>
+  <button class="tab-btn" onclick="switchTab('all',this)">📊 All Emails</button>
+  <button class="tab-btn" onclick="switchTab('sent',this)">✉ Sent History</button>
+</div>
+
+<!-- QUEUE TAB -->
+<div id="tab-queue" class="tab-panel active">
+  <div class="search-row">
+    <input class="search-inp" id="q-search" type="text" placeholder="Search business, category, city…" oninput="debQ()">
+    <span id="q-count" style="color:var(--muted);font-size:12px;white-space:nowrap"></span>
+  </div>
+  <div id="queue-grid" class="queue-grid"><div class="loading"><span class="spin"></span></div></div>
+  <div class="pag" id="q-pag" style="display:none">
+    <button class="btn btn-ghost btn-sm" id="q-prev" onclick="qPage(-1)">← Prev</button>
+    <span class="pag-info" id="q-info"></span>
+    <button class="btn btn-ghost btn-sm" id="q-next" onclick="qPage(1)">Next →</button>
+  </div>
+</div>
+
+<!-- ALL EMAILS TAB -->
+<div id="tab-all" class="tab-panel">
+  <div class="search-row">
+    <input class="search-inp" id="a-search" type="text" placeholder="Search…" oninput="debA()">
+    <span id="a-count" style="color:var(--muted);font-size:12px;white-space:nowrap"></span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="all-tbl">
+      <thead><tr><th>#</th><th>Business</th><th>Category</th><th>City</th><th>Email</th><th>Subject</th><th>Status</th></tr></thead>
+      <tbody id="all-tbody"><tr><td colspan="7" style="text-align:center;padding:30px"><span class="spin"></span></td></tr></tbody>
+    </table>
+  </div>
+  <div class="pag" id="a-pag" style="display:none">
+    <button class="btn btn-ghost btn-sm" id="a-prev" onclick="aPage(-1)">← Prev</button>
+    <span class="pag-info" id="a-info"></span>
+    <button class="btn btn-ghost btn-sm" id="a-next" onclick="aPage(1)">Next →</button>
+  </div>
+</div>
+
+<!-- SENT TAB -->
+<div id="tab-sent" class="tab-panel">
+  <div id="sent-wrap"><div class="loading"><span class="spin"></span></div></div>
+  <div class="pag" id="s-pag" style="display:none">
+    <button class="btn btn-ghost btn-sm" id="s-prev" onclick="sPage(-1)">← Prev</button>
+    <span class="pag-info" id="s-info"></span>
+    <button class="btn btn-ghost btn-sm" id="s-next" onclick="sPage(1)">Next →</button>
+  </div>
+</div>
+
 </main>
-
-<div id="toast-container"></div>
+<div id="toasts"></div>
 
 <script>
 // ── STATE ─────────────────────────────────────────────────────────
-const state = {
-  queuePage: 1,
-  queuePages: 1,
-  queueSearch: '',
-  sentPage: 1,
-  sentPages: 1,
-  pipelineRunning: false,
-  expandedEmail: null,
-  variantStates: {}, // keyed by email
-};
+const S={qPg:1,qPgs:1,qSrc:'',aPg:1,aPgs:1,aSrc:'',sPg:1,sPgs:1,running:false,stage:'idle',lastUpd:null,logOff:false,selFormat:null,pendingCount:0};
+let statsIv,statusIv,qTimer,aTimer,lastUpdIv;
+const DAILY=450,RING=138.23;
 
-let searchTimer = null;
-let statsTimer = null;
-let statusTimer = null;
+// ── HELPERS ───────────────────────────────────────────────────────
+async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);return(await fetch(p,o)).json()}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function toast(msg,t='i'){const c=document.getElementById('toasts');const el=document.createElement('div');el.className=`toast ${t}`;el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),3500)}
+const _av={};
+function animTo(id,tgt){const el=document.getElementById(id);if(!el)return;const cur=parseInt((el.textContent||'0').replace(/,/g,''))||0;if(cur===tgt){el.textContent=tgt.toLocaleString();return}const steps=20,step=[(tgt-cur)/steps,0];clearInterval(_av[id]);_av[id]=setInterval(()=>{step[1]++;const v=Math.round(cur+step[0]*step[1]);el.textContent=v.toLocaleString();if(step[1]>=steps){el.textContent=tgt.toLocaleString();clearInterval(_av[id])}},25)}
 
-// ── API ───────────────────────────────────────────────────────────
-async function api(method, path, body) {
-  const opts = { method, headers: {'Content-Type': 'application/json'} };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(path, opts);
-  return res.json();
+// ── LOG ───────────────────────────────────────────────────────────
+const logs=[];
+function addLog(msg,cls=''){const t=new Date().toLocaleTimeString();logs.unshift({t,msg,cls});if(logs.length>60)logs.pop();renderLog()}
+function renderLog(){document.getElementById('log-entries').innerHTML=logs.slice(0,14).map(l=>`<div class="log-line"><span class="log-t">${l.t}</span><span class="log-m ${l.cls}">${esc(l.msg)}</span></div>`).join('')}
+function toggleLog(){S.logOff=!S.logOff;document.getElementById('log-entries').style.display=S.logOff?'none':'';document.getElementById('log-tog').textContent=S.logOff?'▸':'▾'}
+
+// ── APPROVAL GATE ─────────────────────────────────────────────────
+function selectFormat(card){
+  document.querySelectorAll('.format-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+  S.selFormat=card.dataset.fid;
+  const btn=document.getElementById('approve-btn');
+  btn.disabled=S.pendingCount===0;
+  document.getElementById('gate-hint').textContent=`Format: ${card.querySelector('.format-name').textContent}`;
 }
 
-// ── TOAST ─────────────────────────────────────────────────────────
-function toast(msg, type = 'info') {
-  const c = document.getElementById('toast-container');
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  c.appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+async function loadApprovalStatus(){
+  try{
+    const d=await api('GET','/api/approval/status');
+    S.pendingCount=d.pending_count||0;
+    document.getElementById('gate-count').textContent=`${S.pendingCount.toLocaleString()} emails`;
+    document.getElementById('approve-count').textContent=S.pendingCount.toLocaleString();
+    const gate=document.getElementById('approval-gate');
+    if(d.needs_approval&&S.pendingCount>0){gate.classList.add('visible');loadSamples()}
+    else{gate.classList.remove('visible')}
+    const btn=document.getElementById('approve-btn');
+    btn.disabled=!S.selFormat||S.pendingCount===0;
+  }catch(e){}
+}
+
+async function loadSamples(){
+  const grid=document.getElementById('sample-grid');
+  grid.innerHTML='<div class="loading"><span class="spin"></span></div>';
+  try{
+    const d=await api('GET','/api/samples?n=3');
+    if(!d.samples||!d.samples.length){grid.innerHTML='<div class="loading" style="color:var(--muted)">No samples available</div>';return}
+    grid.innerHTML=d.samples.map(r=>`
+      <div class="sample-card">
+        <div class="sample-biz">${esc(r['Business Name']||'')} <span class="sample-cat">${esc(r['Category']||'')}</span></div>
+        <div class="sample-subj">${esc(r['Subject']||'(no subject)')}</div>
+        <div class="sample-body">${esc(r['Email Body']||'')}</div>
+      </div>`).join('');
+  }catch(e){grid.innerHTML='<div class="loading" style="color:var(--red)">Failed to load samples</div>'}
+}
+
+async function approveBatch(){
+  if(!S.selFormat){toast('Select a format first','e');return}
+  const btn=document.getElementById('approve-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span> Sending…';
+  try{
+    const d=await api('POST','/api/approve-batch',{format_id:S.selFormat});
+    toast(d.msg||(d.ok?'Approved!':'Failed'),d.ok?'s':'e');
+    addLog(d.msg||'Approved & sending',d.ok?'ok':'err');
+    if(d.ok){document.getElementById('approval-gate').classList.remove('visible');startStatusPoll();loadStats()}
+  }catch(e){toast('Request failed','e')}
+  finally{btn.disabled=false;btn.innerHTML=`✓ Approve &amp; Send <span id="approve-count">${S.pendingCount.toLocaleString()}</span> Emails`}
 }
 
 // ── STATS ─────────────────────────────────────────────────────────
-async function loadStats() {
-  try {
-    const d = await api('GET', '/api/stats');
-    document.getElementById('stat-collected').textContent = d.total_collected.toLocaleString();
-    document.getElementById('stat-sent').textContent = d.total_sent.toLocaleString();
-    document.getElementById('stat-pending').textContent = d.pending.toLocaleString();
-    document.getElementById('stat-today').textContent = d.sent_today.toLocaleString();
-    updatePipelineStatus(d.pipeline_running, d.pipeline_stage);
-  } catch(e) { console.warn('Stats error', e); }
+async function loadStats(){
+  try{
+    const d=await api('GET','/api/stats');
+    animTo('s-today',d.sent_today);
+    animTo('s-total',d.total_sent);
+    animTo('s-coll',d.total_collected);
+    animTo('s-pend',d.pending);
+    document.getElementById('top-bar-fill').style.width=(Math.min(d.sent_today/DAILY,1)*100)+'%';
+    updatePipeline(d.pipeline_running,d.pipeline_stage);
+    S.lastUpd=new Date();
+  }catch(e){addLog('Stats error','err')}
 }
 
-function updatePipelineStatus(running, stage) {
-  state.pipelineRunning = running;
-  const dot = document.getElementById('status-dot');
-  const lbl = document.getElementById('status-label');
-  const stageText = document.getElementById('stage-text');
-
-  dot.className = 'status-dot' + (running ? ' running' : '');
-  lbl.textContent = running ? 'Running' : 'Idle';
-  stageText.textContent = running ? `Stage: ${stage}` : 'Ready';
-
-  const btnScrape = document.getElementById('btn-scrape');
-  const btnSend = document.getElementById('btn-send');
-  btnScrape.disabled = running;
-  btnSend.disabled = running;
+async function loadHistory(){
+  try{
+    const d=await api('GET','/api/stats/history');
+    const hist=d.history||[];
+    const last14=hist.slice(-14);
+    // Weekly stats from last 7 days
+    const last7=hist.slice(-7);
+    const weekTotal=last7.reduce((a,x)=>a+x.count,0);
+    const weekAvg=last7.length?Math.round(weekTotal/last7.length):0;
+    document.getElementById('s-week').textContent=weekTotal.toLocaleString();
+    document.getElementById('s-avg').textContent=weekAvg;
+    renderChart(last14);
+  }catch(e){}
 }
 
-// ── PIPELINE ─────────────────────────────────────────────────────
-async function pipelineAction(action) {
-  if (action !== 'stop' && state.pipelineRunning) {
-    toast('Pipeline is already running', 'error'); return;
-  }
-  try {
-    const d = await api('POST', `/api/pipeline/${action}`);
-    toast(d.msg || (d.ok ? 'Done' : 'Failed'), d.ok ? 'success' : 'error');
-    loadStats();
-    if (d.ok && action !== 'stop') startStatusPolling();
-  } catch(e) { toast('Request failed', 'error'); }
+function renderChart(data){
+  const el=document.getElementById('chart-bars');
+  if(!data||!data.length){el.innerHTML='<div style="color:var(--dim);font-size:12px;padding:20px">No history yet</div>';return}
+  const max=Math.max(...data.map(d=>d.count),1);
+  el.innerHTML=data.map(d=>{
+    const pct=Math.max(d.count/max*100,2);
+    const label=d.date.slice(5); // MM-DD
+    return`<div class="chart-bar-wrap">
+      <div class="chart-bar" style="height:${pct}%" data-val="${d.count}"></div>
+      <div class="chart-day">${label}</div>
+    </div>`
+  }).join('');
 }
 
-function startStatusPolling() {
-  clearInterval(statusTimer);
-  statusTimer = setInterval(async () => {
-    const d = await api('GET', '/api/pipeline/status');
-    updatePipelineStatus(d.running, d.stage);
-    if (!d.running) {
-      clearInterval(statusTimer);
-      loadStats();
-      loadQueue();
-    }
-  }, 5000);
+// ── PIPELINE ──────────────────────────────────────────────────────
+function updatePipeline(running,stage){
+  const was=S.running;S.running=running;S.stage=stage;
+  document.getElementById('hdot').className='dot'+(running?' on':'');
+  document.getElementById('hlbl').textContent=running?'Running':'Idle';
+  document.getElementById('stage-txt').textContent=running?`Stage: ${stage}`:'Ready';
+  document.getElementById('btn-scrape').disabled=running;
+  document.getElementById('btn-send').disabled=running;
+  if(running&&!was){addLog(`Pipeline started — ${stage}`,'run');startStatusPoll()}
+  if(!running&&was){addLog('Pipeline finished','ok');stopStatusPoll();loadStats();loadHistory();loadQueue();loadApprovalStatus()}
 }
+function startStatusPoll(){clearInterval(statusIv);statusIv=setInterval(async()=>{try{const d=await api('GET','/api/pipeline/status');if(d.stage!==S.stage)addLog(`Stage: ${d.stage}`,'run');updatePipeline(d.running,d.stage)}catch(e){}},3000)}
+function stopStatusPoll(){clearInterval(statusIv)}
+async function pipelineAction(action){
+  if(action!=='stop'&&S.running){toast('Already running','e');return}
+  try{const d=await api('POST',`/api/pipeline/${action}`);toast(d.msg||(d.ok?'OK':'Failed'),d.ok?'s':'e');addLog(`${action}: ${d.msg||''}`,d.ok?'ok':'err');if(d.ok){loadStats();if(action!=='stop')startStatusPoll()}}
+  catch(e){toast('Failed','e')}
+}
+async function syncGithub(){toast('Syncing…','i');try{const d=await api('POST','/api/sync');toast(d.msg||(d.ok?'Synced!':'Failed'),d.ok?'s':'e');addLog(d.msg||'Sync',d.ok?'ok':'err')}catch(e){toast('Failed','e')}}
 
-// ── GITHUB SYNC ───────────────────────────────────────────────────
-async function syncGithub() {
-  toast('Syncing with GitHub…', 'info');
-  try {
-    const d = await api('POST', '/api/sync');
-    toast(d.msg || (d.ok ? 'Synced!' : 'Sync failed'), d.ok ? 'success' : 'error');
-  } catch(e) { toast('Sync request failed', 'error'); }
-}
+// ── LAST UPDATED TICKER ───────────────────────────────────────────
+function startAgeTick(){clearInterval(lastUpdIv);lastUpdIv=setInterval(()=>{if(!S.lastUpd)return;const s=Math.floor((Date.now()-S.lastUpd)/1000);document.getElementById('hage').textContent=s<5?'just now':`${s}s ago`},1000)}
 
 // ── TABS ──────────────────────────────────────────────────────────
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'sent') loadSent();
-}
+function switchTab(name,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('tab-'+name).classList.add('active');if(name==='sent')loadSent();if(name==='all')loadAll()}
 
 // ── QUEUE ─────────────────────────────────────────────────────────
-function debounceSearch() {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    state.queueSearch = document.getElementById('search-input').value;
-    state.queuePage = 1;
-    loadQueue();
-  }, 350);
+function debQ(){clearTimeout(qTimer);qTimer=setTimeout(()=>{S.qSrc=document.getElementById('q-search').value;S.qPg=1;loadQueue()},350)}
+async function loadQueue(){
+  const el=document.getElementById('queue-grid');el.innerHTML='<div class="loading"><span class="spin"></span></div>';
+  try{
+    const p=new URLSearchParams({page:S.qPg,limit:12,search:S.qSrc});
+    const d=await api('GET',`/api/queue?${p}`);
+    S.qPgs=d.pages||1;
+    document.getElementById('q-count').textContent=`${(d.total||0).toLocaleString()} ready`;
+    if(!d.rows?.length){el.innerHTML='<div class="empty"><span>📭</span>Queue empty</div>';document.getElementById('q-pag').style.display='none';return}
+    el.innerHTML='';d.rows.forEach(r=>el.appendChild(buildCard(r)));
+    const pag=document.getElementById('q-pag');pag.style.display='flex';
+    document.getElementById('q-info').textContent=`Page ${d.page} of ${d.pages}`;
+    document.getElementById('q-prev').disabled=d.page<=1;document.getElementById('q-next').disabled=d.page>=d.pages;
+  }catch(e){el.innerHTML='<div class="empty"><span>⚠️</span>Failed</div>'}
 }
+function qPage(d){S.qPg=Math.max(1,Math.min(S.qPgs,S.qPg+d));loadQueue()}
 
-async function loadQueue() {
-  const el = document.getElementById('queue-list');
-  el.innerHTML = '<div class="loading-row"><span class="spinner"></span></div>';
-
-  try {
-    const params = new URLSearchParams({ page: state.queuePage, limit: 20, search: state.queueSearch });
-    const d = await api('GET', `/api/queue?${params}`);
-
-    state.queuePages = d.pages;
-    document.getElementById('queue-count').textContent = `${d.total.toLocaleString()} emails queued`;
-
-    if (!d.rows || !d.rows.length) {
-      el.innerHTML = '<div class="empty-state"><span>📭</span>No emails in queue</div>';
-      document.getElementById('queue-pagination').style.display = 'none';
-      return;
-    }
-
-    el.innerHTML = '';
-    d.rows.forEach(row => el.appendChild(buildQueueItem(row)));
-
-    // Update pagination
-    const pag = document.getElementById('queue-pagination');
-    pag.style.display = 'flex';
-    document.getElementById('queue-page-info').textContent = `Page ${d.page} of ${d.pages}`;
-    document.getElementById('queue-prev').disabled = d.page <= 1;
-    document.getElementById('queue-next').disabled = d.page >= d.pages;
-  } catch(e) {
-    el.innerHTML = '<div class="empty-state"><span>⚠️</span>Failed to load queue</div>';
-  }
-}
-
-function queueChangePage(delta) {
-  state.queuePage = Math.max(1, Math.min(state.queuePages, state.queuePage + delta));
-  loadQueue();
-}
-
-function buildQueueItem(row) {
-  const email = row['To Email'] || '';
-  const name = row['Business Name'] || '';
-  const cat = row['Category'] || '';
-  const city = row['City'] || '';
-  const state_ = row['State'] || '';
-  const rating = row['Rating'] ? `⭐ ${parseFloat(row['Rating']).toFixed(1)}` : '';
-  const subject = row['Subject'] || '';
-  const body = row['Email Body'] || '';
-
-  const item = document.createElement('div');
-  item.className = 'queue-item';
-  item.dataset.email = email;
-
-  item.innerHTML = `
-    <div class="queue-header" onclick="toggleQueueItem(this.parentElement)">
-      <div class="queue-name">${esc(name)}</div>
-      <span class="queue-tag">${esc(cat)}</span>
-      <span class="queue-meta">${esc(city)}${state_ ? ', '+state_ : ''}</span>
-      ${rating ? `<span class="queue-meta">${rating}</span>` : ''}
-      <span class="queue-meta" style="color:var(--dim);font-size:11px;">${esc(email)}</span>
-      <span class="queue-expand-icon">▼</span>
-    </div>
-    <div class="queue-body">
-      <div class="email-preview" id="preview-${esc(email)}">
-        <div class="email-subject">${esc(subject)}</div>
-        <div class="email-body-text">${esc(body)}</div>
-      </div>
-      <div id="variants-${safeId(email)}"></div>
-      <div class="queue-actions">
-        <button class="btn btn-blue btn-sm" onclick="generateVariants(event, ${JSON.stringify(row)})">🔄 Generate Variants</button>
-        <button class="btn btn-green btn-sm" onclick="approveEmail(event, ${JSON.stringify(email)}, ${JSON.stringify(subject)}, ${JSON.stringify(body)})">✓ Approve</button>
-        <button class="btn btn-ghost btn-sm" onclick="skipEmail(event, ${JSON.stringify(email)})">✗ Skip</button>
+function buildCard(row){
+  const email=row['To Email']||'',name=row['Business Name']||'',cat=row['Category']||'',city=row['City']||'',st=row['State']||'';
+  const rating=row['Rating']?`⭐${parseFloat(row['Rating']).toFixed(1)}`:'';
+  const subj=row['Subject']||'(no subject)',body=row['Email Body']||'(no body)';
+  const sid=email.replace(/[@.+]/g,'_');
+  const c=document.createElement('div');c.className='email-card';c.dataset.email=email;
+  c.innerHTML=`
+    <div class="card-top">
+      <div style="flex:1;min-width:0">
+        <div class="card-name">${esc(name)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+          ${cat?`<span class="tag">${esc(cat)}</span>`:''}
+          ${city?`<span class="tag">${esc(city)}${st?', '+st:''}</span>`:''}
+          ${rating?`<span class="tag">${rating}</span>`:''}
+        </div>
+        <div class="card-email">${esc(email)}</div>
       </div>
     </div>
-  `;
-
-  return item;
+    <div class="email-subj">${esc(subj)}</div>
+    <div class="email-body">${esc(body)}</div>
+    <div id="var-${sid}"></div>
+    <div class="card-actions">
+      <button class="btn btn-blue btn-sm" id="vbtn-${sid}" onclick="genVariants(event,${JSON.stringify(row)})">🔄 5 Variants</button>
+      <button class="btn btn-green btn-sm" onclick="approveEmail(event,${JSON.stringify(email)},${JSON.stringify(subj)},${JSON.stringify(body)})">✓ Approve</button>
+      <button class="btn btn-ghost btn-sm" onclick="skipEmail(event,${JSON.stringify(email)})">✗ Skip</button>
+    </div>`;
+  return c;
 }
 
-function toggleQueueItem(item) {
-  item.classList.toggle('expanded');
-}
-
-function safeId(email) {
-  return email.replace(/[@.]/g, '_');
-}
-
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function generateVariants(event, row) {
-  event.stopPropagation();
-  const email = row['To Email'];
-  const containerId = `variants-${safeId(email)}`;
-  const container = document.getElementById(containerId);
-  const btn = event.target;
-
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Generating…';
-  container.innerHTML = '';
-
-  try {
-    const d = await api('POST', '/api/generate-variants', {
-      business_name: row['Business Name'] || '',
-      category: row['Category'] || '',
-      city: row['City'] || '',
-      state: row['State'] || '',
-      website: row['Website'] || '',
-      rating: row['Rating'] || '',
-      reviews: row['Reviews'] || '',
+async function genVariants(ev,row){
+  ev.stopPropagation();
+  const email=row['To Email'],sid=email.replace(/[@.+]/g,'_');
+  const container=document.getElementById(`var-${sid}`),btn=document.getElementById(`vbtn-${sid}`);
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span>';container.innerHTML='';
+  try{
+    const d=await api('POST','/api/generate-variants',{business_name:row['Business Name']||'',category:row['Category']||'',city:row['City']||'',state:row['State']||'',website:row['Website']||'',rating:row['Rating']||'',reviews:row['Reviews']||''});
+    if(!d.variants?.length){toast('No variants — check Groq key','e');return}
+    const grid=document.createElement('div');grid.className='variants-grid';
+    d.variants.forEach(v=>{
+      const vc=document.createElement('div');vc.className='v-card';
+      vc.innerHTML=`<div class="v-label">Variant ${v.variant}</div><div class="v-subj">${esc(v.subject)}</div><div class="v-body">${esc(v.body)}</div>`;
+      const ub=document.createElement('button');ub.className='btn btn-gold btn-sm';ub.style.marginTop='auto';ub.textContent='Use This';
+      ub.dataset.subject=v.subject;ub.dataset.body=v.body;
+      ub.onclick=e=>{e.stopPropagation();const card=document.querySelector(`.email-card[data-email="${CSS.escape(email)}"]`);if(card){card.querySelector('.email-subj').textContent=v.subject;card.querySelector('.email-body').textContent=v.body}approveEmailDir(email,v.subject,v.body)};
+      vc.appendChild(ub);grid.appendChild(vc);
     });
-
-    if (!d.variants || !d.variants.length) {
-      toast('No variants returned — check Groq API key', 'error');
-      return;
-    }
-
-    const grid = document.createElement('div');
-    grid.className = 'variants-grid';
-
-    d.variants.forEach(v => {
-      const card = document.createElement('div');
-      card.className = 'variant-card';
-      card.innerHTML = `
-        <div class="variant-label">Variant ${v.variant}</div>
-        <div class="variant-subject">${esc(v.subject)}</div>
-        <div class="variant-body">${esc(v.body)}</div>
-        <button class="btn btn-gold btn-sm" style="margin-top:auto" onclick="useVariant(event, '${esc(email)}', '${esc(v.subject).replace(/'/g,"\\'")}', this)">Use This</button>
-      `;
-      // Store body on the button for retrieval
-      card.querySelector('button').dataset.body = v.body;
-      card.querySelector('button').dataset.subject = v.subject;
-      grid.appendChild(card);
-    });
-
-    container.appendChild(grid);
-    toast('3 variants generated', 'success');
-  } catch(e) {
-    toast('Variant generation failed', 'error');
-    console.error(e);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '🔄 Generate Variants';
-  }
+    container.appendChild(grid);toast(`5 variants ready`,'s');addLog(`Variants for ${email}`,'ok');
+  }catch(e){toast('Variants failed','e')}
+  finally{btn.disabled=false;btn.innerHTML='🔄 5 Variants'}
 }
 
-function useVariant(event, email, subject, btn) {
-  event.stopPropagation();
-  const body = btn.dataset.body;
-  const sub = btn.dataset.subject;
-
-  // Update the preview
-  const preview = document.getElementById(`preview-${esc(email)}`);
-  if (preview) {
-    preview.querySelector('.email-subject').textContent = sub;
-    preview.querySelector('.email-body-text').textContent = body;
-  }
-
-  // Auto-approve with selected variant
-  approveEmailDirect(email, sub, body);
+async function approveEmail(ev,email,subj,body){ev.stopPropagation();await approveEmailDir(email,subj,body)}
+async function approveEmailDir(email,subj,body){
+  try{const d=await api('POST','/api/approve',{email,subject:subj,body});if(d.ok){toast(`✓ ${email}`,'s');addLog(`Approved: ${email}`,'ok');const card=document.querySelector(`.email-card[data-email="${CSS.escape(email)}"]`);if(card){card.style.opacity='.3';card.style.pointerEvents='none'}}else toast('Approve failed','e')}
+  catch(e){toast('Failed','e')}
 }
+async function skipEmail(ev,email){ev.stopPropagation();if(!confirm(`Skip: ${email}?`))return;try{const d=await api('POST','/api/skip',{email});if(d.ok){toast('Skipped','i');addLog(`Skipped: ${email}`,'');document.querySelector(`.email-card[data-email="${CSS.escape(email)}"]`)?.remove()}}catch(e){toast('Failed','e')}}
 
-async function approveEmail(event, email, subject, body) {
-  event.stopPropagation();
-  await approveEmailDirect(email, subject, body);
+// ── ALL EMAILS ────────────────────────────────────────────────────
+function debA(){clearTimeout(aTimer);aTimer=setTimeout(()=>{S.aSrc=document.getElementById('a-search').value;S.aPg=1;loadAll()},350)}
+async function loadAll(){
+  const tb=document.getElementById('all-tbody');tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:26px"><span class="spin"></span></td></tr>';
+  try{
+    const p=new URLSearchParams({page:S.aPg,limit:100,search:S.aSrc});
+    const [qd,sd]=await Promise.all([api('GET',`/api/queue?${p}`),api('GET','/api/sent?page=1&limit=9999')]);
+    const sentSet=new Set((sd.rows||[]).map(r=>(r['To Email']||'').toLowerCase()));
+    S.aPgs=qd.pages||1;document.getElementById('a-count').textContent=`${(qd.total||0).toLocaleString()} emails`;
+    if(!qd.rows?.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--muted)">No emails</td></tr>';document.getElementById('a-pag').style.display='none';return}
+    const off=(S.aPg-1)*100;
+    tb.innerHTML=qd.rows.map((r,i)=>{
+      const isSent=sentSet.has((r['To Email']||'').toLowerCase());
+      return`<tr onclick="jumpQueue('${esc(r['To Email']||'')}')">
+        <td style="color:var(--dim)">${off+i+1}</td>
+        <td class="cell-t" title="${esc(r['Business Name'])}">${esc(r['Business Name']||'')}</td>
+        <td class="cell-t">${esc(r['Category']||'')}</td>
+        <td>${esc(r['City']||'')}${r['State']?', '+r['State']:''}</td>
+        <td class="cell-t" style="color:var(--dim)">${esc(r['To Email']||'')}</td>
+        <td class="cell-t" title="${esc(r['Subject'])}">${esc(r['Subject']||'')}</td>
+        <td><span class="badge ${isSent?'badge-s':'badge-q'}">${isSent?'Sent':'Queued'}</span></td>
+      </tr>`;
+    }).join('');
+    const pag=document.getElementById('a-pag');pag.style.display='flex';
+    document.getElementById('a-info').textContent=`Page ${S.aPg} of ${S.aPgs}`;
+    document.getElementById('a-prev').disabled=S.aPg<=1;document.getElementById('a-next').disabled=S.aPg>=S.aPgs;
+  }catch(e){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--red);padding:26px">Failed</td></tr>'}
 }
-
-async function approveEmailDirect(email, subject, body) {
-  try {
-    const d = await api('POST', '/api/approve', { email, subject, body });
-    if (d.ok) {
-      toast(`✓ Approved — ${email}`, 'success');
-      // Remove the item from view after a moment
-      setTimeout(() => {
-        const item = document.querySelector(`.queue-item[data-email="${CSS.escape(email)}"]`);
-        if (item) item.style.opacity = '0.3';
-      }, 400);
-    } else {
-      toast('Approve failed', 'error');
-    }
-  } catch(e) { toast('Request failed', 'error'); }
-}
-
-async function skipEmail(event, email) {
-  event.stopPropagation();
-  if (!confirm(`Skip and remove ${email}?`)) return;
-  try {
-    const d = await api('POST', '/api/skip', { email });
-    if (d.ok) {
-      toast(`Skipped ${email}`, 'info');
-      const item = document.querySelector(`.queue-item[data-email="${CSS.escape(email)}"]`);
-      if (item) item.remove();
-      loadQueue();
-    }
-  } catch(e) { toast('Skip failed', 'error'); }
-}
+function aPage(d){S.aPg=Math.max(1,Math.min(S.aPgs,S.aPg+d));loadAll()}
+function jumpQueue(email){S.qSrc=email;document.getElementById('q-search').value=email;S.qPg=1;document.querySelectorAll('.tab-btn').forEach((b,i)=>{b.classList.toggle('active',i===0)});document.querySelectorAll('.tab-panel').forEach((p,i)=>{p.classList.toggle('active',i===0)});loadQueue()}
 
 // ── SENT HISTORY ──────────────────────────────────────────────────
-async function loadSent() {
-  const container = document.getElementById('sent-content');
-  container.innerHTML = '<div class="loading-row"><span class="spinner"></span></div>';
-
-  try {
-    const params = new URLSearchParams({ page: state.sentPage, limit: 30 });
-    const d = await api('GET', `/api/sent?${params}`);
-
-    state.sentPages = d.pages;
-
-    if (!d.rows || !d.rows.length) {
-      container.innerHTML = '<div class="empty-state"><span>📭</span>No emails sent yet</div>';
-      document.getElementById('sent-pagination').style.display = 'none';
-      return;
-    }
-
-    const table = document.createElement('table');
-    table.className = 'sent-table';
-    table.innerHTML = `
-      <thead><tr>
-        <th>Business Name</th>
-        <th>Email</th>
-        <th>Subject</th>
-        <th>Sent At</th>
-      </tr></thead>
-      <tbody>
-        ${d.rows.map(r => `
-          <tr>
-            <td title="${esc(r['Business Name'])}">${esc(r['Business Name'] || '—')}</td>
-            <td>${esc(r['To Email'] || '—')}</td>
-            <td title="${esc(r['Subject'])}">${esc(r['Subject'] || '—')}</td>
-            <td>${esc(r['Sent At'] || '—')}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    `;
-    container.innerHTML = '';
-    container.appendChild(table);
-
-    const pag = document.getElementById('sent-pagination');
-    pag.style.display = 'flex';
-    document.getElementById('sent-page-info').textContent = `Page ${d.page} of ${d.pages} (${d.total.toLocaleString()} total)`;
-    document.getElementById('sent-prev').disabled = d.page <= 1;
-    document.getElementById('sent-next').disabled = d.page >= d.pages;
-  } catch(e) {
-    container.innerHTML = '<div class="empty-state"><span>⚠️</span>Failed to load sent history</div>';
-  }
+async function loadSent(){
+  const wrap=document.getElementById('sent-wrap');wrap.innerHTML='<div class="loading"><span class="spin"></span></div>';
+  try{
+    const d=await api('GET',`/api/sent?page=${S.sPg}&limit=30`);S.sPgs=d.pages||1;
+    if(!d.rows?.length){wrap.innerHTML='<div class="empty"><span>📭</span>Nothing sent yet</div>';document.getElementById('s-pag').style.display='none';return}
+    const tbl=document.createElement('table');tbl.className='sent-tbl';
+    tbl.innerHTML='<thead><tr><th>Business</th><th>Email</th><th>Subject</th><th>Sent At</th></tr></thead>';
+    const tb=document.createElement('tbody');
+    d.rows.forEach(r=>{
+      const tr=document.createElement('tr');tr.className='exp';
+      tr.innerHTML=`<td>${esc(r['Business Name']||r['Business']||'—')}</td><td style="color:var(--muted)">${esc(r['To Email']||'—')}</td><td class="cell-t" title="${esc(r['Subject'])}">${esc(r['Subject']||'—')}</td><td style="color:var(--dim);font-size:11px">${esc(r['Sent At']||'—')}</td>`;
+      const dr=document.createElement('tr');dr.style.display='none';
+      const dtd=document.createElement('td');dtd.colSpan=4;dtd.className='detail-td';
+      dtd.innerHTML=`<div class="detail-inner"><div class="detail-subj">${esc(r['Subject']||'')}</div><div class="detail-body">${esc(r['Email Body']||r['Body']||'(body not stored)')}</div></div>`;
+      dr.appendChild(dtd);
+      tr.onclick=()=>{dr.style.display=dr.style.display==='none'?'table-row':'none'};
+      tb.appendChild(tr);tb.appendChild(dr);
+    });
+    tbl.appendChild(tb);wrap.innerHTML='';wrap.appendChild(tbl);
+    const pag=document.getElementById('s-pag');pag.style.display='flex';
+    document.getElementById('s-info').textContent=`Page ${d.page} of ${d.pages} (${d.total.toLocaleString()} total)`;
+    document.getElementById('s-prev').disabled=d.page<=1;document.getElementById('s-next').disabled=d.page>=d.pages;
+  }catch(e){wrap.innerHTML='<div class="empty"><span>⚠️</span>Failed</div>'}
 }
+function sPage(d){S.sPg=Math.max(1,Math.min(S.sPgs,S.sPg+d));loadSent()}
 
-function sentChangePage(delta) {
-  state.sentPage = Math.max(1, Math.min(state.sentPages, state.sentPage + delta));
-  loadSent();
-}
-
-// ── INIT ─────────────────────────────────────────────────────────
-async function init() {
-  await loadStats();
+// ── INIT ──────────────────────────────────────────────────────────
+async function init(){
+  addLog('Dashboard loaded','ok');
+  await Promise.all([loadStats(),loadHistory(),loadApprovalStatus()]);
   await loadQueue();
-
-  // Auto-refresh stats every 30s
-  statsTimer = setInterval(loadStats, 30000);
+  statsIv=setInterval(async()=>{await loadStats();loadApprovalStatus()},5000);
+  setInterval(loadHistory,60000);
+  startAgeTick();
 }
-
 init();
 </script>
 </body>

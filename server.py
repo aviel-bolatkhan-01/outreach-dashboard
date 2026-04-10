@@ -189,6 +189,8 @@ Subject: [subject line]
 
     return variants
 
+APPROVAL_FILE = LEADS_DIR / ".pending_approval"
+
 # ── FASTAPI APP ───────────────────────────────────────────────────
 app = FastAPI(title="Outreach Dashboard")
 
@@ -384,6 +386,72 @@ def pipeline_status():
     return {
         "running": pipeline_running(),
         "stage": _pipeline_stage,
+    }
+
+# ── API: SEND HISTORY (daily breakdown) ──────────────────────────
+@app.get("/api/stats/history")
+def get_history():
+    rows = read_csv(SENT_LOG)
+    from collections import defaultdict
+    import re as _re
+    by_day = defaultdict(int)
+    date_pat = _re.compile(r'^\d{4}-\d{2}-\d{2}')
+    for r in rows:
+        day = (r.get("Sent At") or "")[:10]
+        if day and date_pat.match(day): by_day[day] += 1
+    # Last 30 days sorted
+    sorted_days = sorted(by_day.items())[-30:]
+    return {"history": [{"date": d, "count": c} for d, c in sorted_days]}
+
+# ── API: SAMPLE EMAILS ─────────────────────────────────────────────
+@app.get("/api/samples")
+def get_samples(n: int = 5):
+    master = read_csv(MASTER_CSV)
+    sent   = load_sent_set()
+    pool   = [r for r in master
+              if r.get("To Email","").lower() not in sent
+              and r.get("Email Body","").strip()
+              and not is_bad_email(r.get("To Email",""))]
+    import random as _random
+    samples = _random.sample(pool, min(n, len(pool))) if pool else []
+    return {"samples": samples, "total_pending": len(pool)}
+
+# ── API: APPROVE BATCH (write approval token, pipeline picks it up) ─
+class ApproveBatchRequest(BaseModel):
+    format_id: str = "default"
+
+@app.post("/api/approve-batch")
+def approve_batch(req: ApproveBatchRequest, background_tasks: BackgroundTasks):
+    APPROVAL_FILE.write_text(req.format_id)
+    # If pipeline is not running, trigger send directly
+    if not pipeline_running():
+        def run_send():
+            global _pipeline_proc, _pipeline_stage
+            _pipeline_stage = "sending"
+            _pipeline_proc = subprocess.Popen(
+                [PYTHON, str(LEADS_DIR / "send_emails_batch_475.py")],
+                cwd=str(LEADS_DIR)
+            )
+            _pipeline_proc.wait()
+            _pipeline_stage = "idle"
+            if APPROVAL_FILE.exists(): APPROVAL_FILE.unlink()
+        background_tasks.add_task(run_send)
+        return {"ok": True, "msg": "Approved — send started"}
+    return {"ok": True, "msg": "Approval saved — pipeline will pick it up"}
+
+# ── API: APPROVAL STATUS ───────────────────────────────────────────
+@app.get("/api/approval/status")
+def approval_status():
+    master = read_csv(MASTER_CSV)
+    sent   = load_sent_set()
+    pending = sum(1 for r in master
+                  if r.get("To Email","").lower() not in sent
+                  and r.get("Email Body","").strip()
+                  and not is_bad_email(r.get("To Email","")))
+    return {
+        "needs_approval": not APPROVAL_FILE.exists() and pending > 0,
+        "pending_count": pending,
+        "approved": APPROVAL_FILE.exists(),
     }
 
 # ── API: GITHUB SYNC ───────────────────────────────────────────────
