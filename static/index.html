@@ -91,7 +91,7 @@ main{max-width:1380px;margin:0 auto;padding:20px 24px}
 .log-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:18px;overflow:hidden}
 .log-hdr{padding:9px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer}
 .log-hdr .tog{margin-left:auto;color:var(--dim);font-size:12px}
-#log-entries{max-height:110px;overflow-y:auto;padding:4px 0}
+#log-entries{max-height:200px;overflow-y:auto;padding:4px 0}
 .log-line{padding:3px 16px;font-size:12px;color:var(--muted);display:flex;gap:10px}
 .log-t{color:var(--dim);flex-shrink:0;font-variant-numeric:tabular-nums;font-size:11px}
 .log-m.ok{color:var(--green)}.log-m.run{color:var(--gold)}.log-m.err{color:var(--red)}
@@ -183,6 +183,35 @@ main{max-width:1380px;margin:0 auto;padding:20px 24px}
 .empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:15px}
 .empty span{font-size:30px;display:block;margin-bottom:10px}
 .loading{text-align:center;padding:36px;color:var(--muted)}
+@media(max-width:768px){
+  main{padding:12px 12px}
+  header{padding:10px 14px}
+  header h1{font-size:15px}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .stat-val{font-size:17px}
+  .chart-wrap{padding:12px 14px}
+  .chart-bars{height:60px}
+  .pipeline-bar{flex-wrap:wrap;gap:8px;padding:10px 14px}
+  .pipeline-bar .btn{flex:1;min-width:0;text-align:center}
+  .tab-btn{padding:8px 12px;font-size:12px}
+  .email-card{padding:12px}
+  .card-name{font-size:14px}
+  .all-tbl th:nth-child(3),.all-tbl td:nth-child(3),
+  .all-tbl th:nth-child(4),.all-tbl td:nth-child(4){display:none}
+  .format-row{gap:8px}
+  .format-card{flex:0 0 160px;padding:10px}
+  #term-body{height:180px}
+  .term-badges{display:none}
+}
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:1fr}
+  .tabs{overflow-x:auto;flex-wrap:nowrap}
+  .tab-btn{white-space:nowrap;padding:8px 10px;font-size:11px}
+  .all-tbl th:nth-child(5),.all-tbl td:nth-child(5){display:none}
+  .pag{gap:6px}
+  .pag .btn{padding:5px 10px;font-size:11px}
+  header .btn{display:none}
+}
 </style>
 </head>
 <body>
@@ -251,7 +280,7 @@ main{max-width:1380px;margin:0 auto;padding:20px 24px}
   <div class="stat-group">
     <div class="stat-group-title">Today</div>
     <div class="stat-row"><span class="stat-label">Sent</span><span class="stat-val" id="s-today">—</span></div>
-    <div class="stat-row"><span class="stat-label">Daily limit</span><span class="stat-val sm">/ 450</span></div>
+    <div class="stat-row"><span class="stat-label">Daily limit</span><span class="stat-val sm">/ 475</span></div>
   </div>
   <div class="stat-group">
     <div class="stat-group-title">This Week</div>
@@ -297,7 +326,7 @@ main{max-width:1380px;margin:0 auto;padding:20px 24px}
 <!-- ACTIVITY LOG -->
 <div class="log-wrap">
   <div class="log-hdr" onclick="toggleLog()">
-    ⚡ Activity Log <span class="tog" id="log-tog">▾</span>
+    ⚡ Activity Log <span id="log-count-badge" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:1px 8px;font-size:10px;color:var(--muted);margin-left:6px">0</span><span class="tog" id="log-tog">▾</span>
   </div>
   <div id="log-entries"></div>
 </div>
@@ -344,6 +373,7 @@ main{max-width:1380px;margin:0 auto;padding:20px 24px}
 
 <!-- SENT TAB -->
 <div id="tab-sent" class="tab-panel">
+  <div id="sent-date-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
   <div id="sent-wrap"><div class="loading"><span class="spin"></span></div></div>
   <div class="pag" id="s-pag" style="display:none">
     <button class="btn btn-ghost btn-sm" id="s-prev" onclick="sPage(-1)">← Prev</button>
@@ -357,7 +387,7 @@ main{max-width:1380px;margin:0 auto;padding:20px 24px}
 
 <script>
 // ── STATE ─────────────────────────────────────────────────────────
-const S={qPg:1,qPgs:1,qSrc:'',aPg:1,aPgs:1,aSrc:'',sPg:1,sPgs:1,running:false,stage:'idle',lastUpd:null,logOff:false,selFormat:null,pendingCount:0};
+const S={qPg:1,qPgs:1,qSrc:'',aPg:1,aPgs:1,aSrc:'',sPg:1,sPgs:1,running:false,stage:'idle',lastUpd:null,logOff:false,selFormat:null,pendingCount:0,sentDate:''};
 let statsIv,statusIv,qTimer,aTimer,lastUpdIv;
 const DAILY=450,RING=138.23;
 
@@ -371,10 +401,11 @@ function animTo(id,tgt){const el=document.getElementById(id);if(!el)return;const
 // ── LOG ───────────────────────────────────────────────────────────
 const logs=[];
 function addLog(msg,cls=''){const t=new Date().toLocaleTimeString();logs.unshift({t,msg,cls});if(logs.length>60)logs.pop();renderLog()}
-function renderLog(){document.getElementById('log-entries').innerHTML=logs.slice(0,14).map(l=>`<div class="log-line"><span class="log-t">${l.t}</span><span class="log-m ${l.cls}">${esc(l.msg)}</span></div>`).join('')}
+function renderLog(){document.getElementById('log-entries').innerHTML=logs.map(l=>`<div class="log-line"><span class="log-t">${l.t}</span><span class="log-m ${l.cls}">${esc(l.msg)}</span></div>`).join('');const badge=document.getElementById('log-count-badge');if(badge)badge.textContent=logs.length}
 function toggleLog(){S.logOff=!S.logOff;document.getElementById('log-entries').style.display=S.logOff?'none':'';document.getElementById('log-tog').textContent=S.logOff?'▸':'▾'}
 
 // ── APPROVAL GATE ─────────────────────────────────────────────────
+let _fmtSamples=null;
 function selectFormat(card){
   document.querySelectorAll('.format-card').forEach(c=>c.classList.remove('selected'));
   card.classList.add('selected');
@@ -382,6 +413,16 @@ function selectFormat(card){
   const btn=document.getElementById('approve-btn');
   btn.disabled=S.pendingCount===0;
   document.getElementById('gate-hint').textContent=`Format: ${card.querySelector('.format-name').textContent}`;
+  // Show real generated example for this format if available
+  if(_fmtSamples&&_fmtSamples[S.selFormat]){
+    const s=_fmtSamples[S.selFormat];
+    const grid=document.getElementById('sample-grid');
+    grid.innerHTML=`<div class="sample-card" style="grid-column:1/-1">
+      <div class="sample-biz">${esc(s.company||'')}${s.city?' — '+esc(s.city):''} <span class="sample-cat">${esc(s.category||'')}</span></div>
+      <div class="sample-subj">${esc(s.subject||'(no subject)')}</div>
+      <div class="sample-body" style="max-height:200px">${esc(s.body||'')}</div>
+    </div>`;
+  }
 }
 
 async function loadApprovalStatus(){
@@ -391,7 +432,12 @@ async function loadApprovalStatus(){
     document.getElementById('gate-count').textContent=`${S.pendingCount.toLocaleString()} emails`;
     document.getElementById('approve-count').textContent=S.pendingCount.toLocaleString();
     const gate=document.getElementById('approval-gate');
-    if(d.needs_approval&&S.pendingCount>0){gate.classList.add('visible');loadSamples()}
+    if(d.needs_approval&&S.pendingCount>0){
+      const wasVisible=gate.classList.contains('visible');
+      gate.classList.add('visible');
+      if(!wasVisible){addLog(`⏳ Approval needed — ${S.pendingCount} emails ready`,'run')}
+      loadSamples();
+    }
     else{gate.classList.remove('visible')}
     const btn=document.getElementById('approve-btn');
     btn.disabled=!S.selFormat||S.pendingCount===0;
@@ -403,13 +449,20 @@ async function loadSamples(){
   grid.innerHTML='<div class="loading"><span class="spin"></span></div>';
   try{
     const d=await api('GET','/api/samples?n=3');
-    if(!d.samples||!d.samples.length){grid.innerHTML='<div class="loading" style="color:var(--muted)">No samples available</div>';return}
-    grid.innerHTML=d.samples.map(r=>`
-      <div class="sample-card">
-        <div class="sample-biz">${esc(r['Business Name']||'')} <span class="sample-cat">${esc(r['Category']||'')}</span></div>
-        <div class="sample-subj">${esc(r['Subject']||'(no subject)')}</div>
-        <div class="sample-body">${esc(r['Email Body']||'')}</div>
-      </div>`).join('');
+    _fmtSamples=d.format_samples||null;
+    if(_fmtSamples){
+      // Real format examples from pipeline — prompt user to click a format card
+      grid.innerHTML='<div class="loading" style="color:var(--muted);padding:16px 0;font-size:13px">← Click a format card above to see a real AI-generated email example for your leads</div>';
+    }else if(d.samples&&d.samples.length){
+      grid.innerHTML=d.samples.map(r=>`
+        <div class="sample-card">
+          <div class="sample-biz">${esc(r['Business Name']||'')} <span class="sample-cat">${esc(r['Category']||'')}</span></div>
+          <div class="sample-subj">${esc(r['Subject']||'(no subject)')}</div>
+          <div class="sample-body">${esc(r['Email Body']||'')}</div>
+        </div>`).join('');
+    }else{
+      grid.innerHTML='<div class="loading" style="color:var(--muted)">No samples available — run pipeline first</div>';
+    }
   }catch(e){grid.innerHTML='<div class="loading" style="color:var(--red)">Failed to load samples</div>'}
 }
 
@@ -430,11 +483,15 @@ async function approveBatch(){
 async function loadStats(){
   try{
     const d=await api('GET','/api/stats');
-    animTo('s-today',d.sent_today);
+    const newSent=d.sent_today||0;
+    if(_lastSentToday===null&&newSent>0){addLog(`📤 Sent today: ${newSent} emails`,'ok')}
+    else if(_lastSentToday!==null&&newSent!==_lastSentToday){addLog(`📤 Sent today: ${newSent} emails`,'ok')}
+    _lastSentToday=newSent;
+    animTo('s-today',newSent);
     animTo('s-total',d.total_sent);
     animTo('s-coll',d.total_collected);
     animTo('s-pend',d.pending);
-    document.getElementById('top-bar-fill').style.width=(Math.min(d.sent_today/DAILY,1)*100)+'%';
+    document.getElementById('top-bar-fill').style.width=(Math.min(newSent/DAILY,1)*100)+'%';
     updatePipeline(d.pipeline_running,d.pipeline_stage);
     S.lastUpd=new Date();
   }catch(e){addLog('Stats error','err')}
@@ -536,21 +593,47 @@ function startSSE(){
 
 function stopSSE(){ if(_sse){ _sse.close(); _sse = null } }
 
+// ── BUTTON HELPERS ────────────────────────────────────────────────
+function setButtonRunning(btnId,label){
+  const btn=document.getElementById(btnId);
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spin" style="width:11px;height:11px;margin-right:6px"></span>${label}`;
+}
+function resetButtons(){
+  const bs=document.getElementById('btn-scrape');
+  const bsn=document.getElementById('btn-send');
+  bs.disabled=false;bs.innerHTML='▶ Scrape Leads';
+  bsn.disabled=false;bsn.innerHTML='📤 Send Now';
+}
+
 // ── PIPELINE ──────────────────────────────────────────────────────
 function updatePipeline(running,stage){
   const was=S.running;S.running=running;S.stage=stage;
   document.getElementById('hdot').className='dot'+(running?' on':'');
   document.getElementById('hlbl').textContent=running?'Running':'Idle';
-  document.getElementById('stage-txt').textContent=running?`Stage: ${stage}`:'Ready';
-  document.getElementById('btn-scrape').disabled=running;
-  document.getElementById('btn-send').disabled=running;
-  if(running&&!was){addLog(`Pipeline started — ${stage}`,'run');startStatusPoll()}
-  if(!running&&was){addLog('Pipeline finished','ok');stopStatusPoll();stopSSE();loadStats();loadHistory();loadQueue();loadApprovalStatus()}
+  const stageTxt=document.getElementById('stage-txt');
+  if(running){
+    stageTxt.innerHTML=`<span style="color:var(--gold);font-weight:700">${stage.toUpperCase()}</span> <span style="color:var(--dim)">— in progress</span>`;
+  } else {
+    stageTxt.textContent='Ready';
+  }
+  if(running){
+    const stg=(stage||'').toLowerCase();
+    if(stg==='scraping'){setButtonRunning('btn-scrape','⏳ Scraping…');document.getElementById('btn-send').disabled=true}
+    else if(stg==='sending'){setButtonRunning('btn-send','⏳ Sending…');document.getElementById('btn-scrape').disabled=true}
+    else{document.getElementById('btn-scrape').disabled=true;document.getElementById('btn-send').disabled=true}
+  } else {
+    resetButtons();
+  }
+  if(running&&!was){addLog(`Pipeline started — ${stage}`,'run');startStatusPoll();pollActivityLog()}
+  if(!running&&was){addLog('✅ Pipeline complete','ok');stopStatusPoll();stopSSE();loadStats();loadHistory();loadQueue();loadApprovalStatus();pollActivityLog()}
 }
 function startStatusPoll(){clearInterval(statusIv);statusIv=setInterval(async()=>{try{const d=await api('GET','/api/pipeline/status');if(d.stage!==S.stage)addLog(`Stage: ${d.stage}`,'run');updatePipeline(d.running,d.stage)}catch(e){}},3000)}
 function stopStatusPoll(){clearInterval(statusIv)}
 async function pipelineAction(action){
   if(action!=='stop'&&S.running){toast('Already running','e');return}
+  if(action==='scrape'){addLog('🔍 Scraping started','run')}
+  else if(action==='send'){addLog('📤 Send started','run')}
   try{
     const d=await api('POST',`/api/pipeline/${action}`);
     toast(d.msg||(d.ok?'OK':'Failed'),d.ok?'s':'e');
@@ -566,7 +649,7 @@ async function syncGithub(){toast('Syncing…','i');try{const d=await api('POST'
 function startAgeTick(){clearInterval(lastUpdIv);lastUpdIv=setInterval(()=>{if(!S.lastUpd)return;const s=Math.floor((Date.now()-S.lastUpd)/1000);document.getElementById('hage').textContent=s<5?'just now':`${s}s ago`},1000)}
 
 // ── TABS ──────────────────────────────────────────────────────────
-function switchTab(name,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('tab-'+name).classList.add('active');if(name==='sent')loadSent();if(name==='all')loadAll()}
+function switchTab(name,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('tab-'+name).classList.add('active');if(name==='sent'){loadSentDates();loadSent()}if(name==='all')loadAll()}
 
 // ── QUEUE ─────────────────────────────────────────────────────────
 function debQ(){clearTimeout(qTimer);qTimer=setTimeout(()=>{S.qSrc=document.getElementById('q-search').value;S.qPg=1;loadQueue()},350)}
@@ -650,13 +733,12 @@ async function loadAll(){
   const tb=document.getElementById('all-tbody');tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:26px"><span class="spin"></span></td></tr>';
   try{
     const p=new URLSearchParams({page:S.aPg,limit:100,search:S.aSrc});
-    const [qd,sd]=await Promise.all([api('GET',`/api/queue?${p}`),api('GET','/api/sent?page=1&limit=9999')]);
-    const sentSet=new Set((sd.rows||[]).map(r=>(r['To Email']||'').toLowerCase()));
-    S.aPgs=qd.pages||1;document.getElementById('a-count').textContent=`${(qd.total||0).toLocaleString()} emails`;
-    if(!qd.rows?.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--muted)">No emails</td></tr>';document.getElementById('a-pag').style.display='none';return}
+    const d=await api('GET',`/api/all?${p}`);
+    S.aPgs=d.pages||1;document.getElementById('a-count').textContent=`${(d.total||0).toLocaleString()} emails`;
+    if(!d.rows?.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--muted)">No emails</td></tr>';document.getElementById('a-pag').style.display='none';return}
     const off=(S.aPg-1)*100;
-    tb.innerHTML=qd.rows.map((r,i)=>{
-      const isSent=sentSet.has((r['To Email']||'').toLowerCase());
+    tb.innerHTML=d.rows.map((r,i)=>{
+      const isSent=(r['Status']||'').toLowerCase()==='sent';
       return`<tr onclick="jumpQueue('${esc(r['To Email']||'')}')">
         <td style="color:var(--dim)">${off+i+1}</td>
         <td class="cell-t" title="${esc(r['Business Name'])}">${esc(r['Business Name']||'')}</td>
@@ -676,11 +758,28 @@ function aPage(d){S.aPg=Math.max(1,Math.min(S.aPgs,S.aPg+d));loadAll()}
 function jumpQueue(email){S.qSrc=email;document.getElementById('q-search').value=email;S.qPg=1;document.querySelectorAll('.tab-btn').forEach((b,i)=>{b.classList.toggle('active',i===0)});document.querySelectorAll('.tab-panel').forEach((p,i)=>{p.classList.toggle('active',i===0)});loadQueue()}
 
 // ── SENT HISTORY ──────────────────────────────────────────────────
+async function loadSentDates(){
+  try{
+    const d=await api('GET','/api/sent/dates');
+    const bar=document.getElementById('sent-date-tabs');
+    if(!d.dates?.length){bar.innerHTML='';return}
+    // Default to most recent date
+    if(!S.sentDate&&d.dates.length)S.sentDate=d.dates[0].date;
+    bar.innerHTML=d.dates.map(({date,count})=>{
+      const label=date===new Date().toISOString().slice(0,10)?'Today':date;
+      const active=date===S.sentDate?'style="background:var(--gold);color:#000;border-color:var(--gold)"':'';
+      return `<button class="btn btn-ghost btn-sm" ${active} onclick="setSentDate('${date}')">${label} <span style="opacity:.6;font-size:10px">${count}</span></button>`;
+    }).join('');
+  }catch(e){}
+}
+function setSentDate(date){S.sentDate=date;S.sPg=1;loadSentDates();loadSent()}
+
 async function loadSent(){
   const wrap=document.getElementById('sent-wrap');wrap.innerHTML='<div class="loading"><span class="spin"></span></div>';
   try{
-    const d=await api('GET',`/api/sent?page=${S.sPg}&limit=30`);S.sPgs=d.pages||1;
-    if(!d.rows?.length){wrap.innerHTML='<div class="empty"><span>📭</span>Nothing sent yet</div>';document.getElementById('s-pag').style.display='none';return}
+    const url=S.sentDate?`/api/sent?page=${S.sPg}&limit=30&date=${S.sentDate}`:`/api/sent?page=${S.sPg}&limit=30`;
+    const d=await api('GET',url);S.sPgs=d.pages||1;
+    if(!d.rows?.length){wrap.innerHTML='<div class="empty"><span>📭</span>No emails sent'+(S.sentDate?' on '+S.sentDate:'')+'</div>';document.getElementById('s-pag').style.display='none';return}
     const tbl=document.createElement('table');tbl.className='sent-tbl';
     tbl.innerHTML='<thead><tr><th>Business</th><th>Email</th><th>Subject</th><th>Sent At</th></tr></thead>';
     const tb=document.createElement('tbody');
@@ -696,20 +795,56 @@ async function loadSent(){
     });
     tbl.appendChild(tb);wrap.innerHTML='';wrap.appendChild(tbl);
     const pag=document.getElementById('s-pag');pag.style.display='flex';
-    document.getElementById('s-info').textContent=`Page ${d.page} of ${d.pages} (${d.total.toLocaleString()} total)`;
+    document.getElementById('s-info').textContent=`Page ${d.page} of ${d.pages} (${d.total.toLocaleString()} sent)`;
     document.getElementById('s-prev').disabled=d.page<=1;document.getElementById('s-next').disabled=d.page>=d.pages;
   }catch(e){wrap.innerHTML='<div class="empty"><span>⚠️</span>Failed</div>'}
 }
 function sPage(d){S.sPg=Math.max(1,Math.min(S.sPgs,S.sPg+d));loadSent()}
 
+// ── ACTIVITY LOG POLL ─────────────────────────────────────────────
+let _logSeenCount=0;
+let _logPollIv=null;
+let _logPollRunning=null;
+const _NOISY=/^\s*$|^Traceback|^  File "|^  File '/;
+function _logClass(line){
+  const l=line.toLowerCase();
+  if(/error|failed|exception/.test(l))return'err';
+  if(/warning|warn/.test(l))return'run';
+  if(/sent|success|complete|done|ok/.test(l))return'ok';
+  return'';
+}
+async function _fetchPipelineLogs(){
+  try{
+    const d=await api('GET','/api/logs?lines=30');
+    const lines=(d.lines||[]).filter(l=>!_NOISY.test(l));
+    if(lines.length<=_logSeenCount)return;
+    const newLines=lines.slice(_logSeenCount);
+    _logSeenCount=lines.length;
+    newLines.forEach(line=>{addLog(line.trim(),_logClass(line))});
+  }catch(e){}
+}
+function pollActivityLog(){
+  const wantRunning=S.running;
+  if(_logPollIv&&_logPollRunning===wantRunning)return; // already correct interval
+  if(_logPollIv)clearInterval(_logPollIv);
+  _logPollRunning=wantRunning;
+  _logPollIv=setInterval(_fetchPipelineLogs,wantRunning?8000:30000);
+}
+
 // ── INIT ──────────────────────────────────────────────────────────
+let _lastSentToday=null;
 async function init(){
   addLog('Dashboard loaded','ok');
   await Promise.all([loadStats(),loadHistory(),loadApprovalStatus()]);
   await loadQueue();
-  statsIv=setInterval(async()=>{await loadStats();loadApprovalStatus()},5000);
+  statsIv=setInterval(async()=>{
+    const prevSent=_lastSentToday;
+    await loadStats();
+    loadApprovalStatus();
+  },5000);
   setInterval(loadHistory,60000);
   startAgeTick();
+  pollActivityLog();
 }
 init();
 </script>

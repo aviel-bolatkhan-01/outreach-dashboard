@@ -29,6 +29,7 @@ MASTER_COLS = [
     "Business Name","Category","City","State","To Email",
     "Phone","Website","Rating","Reviews","Subject","Email Body"
 ]
+SENT_LOG_COLS = ["To Email", "Business Name", "Subject", "Sent At", "Status"]
 
 # ── SECRETS ───────────────────────────────────────────────────────
 secrets = Path.home() / ".claude/ai-secrets.env"
@@ -77,23 +78,92 @@ def write_csv(path: Path, rows: list, fieldnames: list):
         w.writeheader()
         w.writerows(rows)
 
+def read_sent_rows():
+    if not SENT_LOG.exists():
+        return []
+    rows = []
+    try:
+        with open(SENT_LOG, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, [])
+            for raw in reader:
+                if not raw:
+                    continue
+                if len(raw) >= 5:
+                    row = dict(zip(SENT_LOG_COLS, raw[:5]))
+                elif len(raw) == 3:
+                    row = {
+                        "To Email": raw[0],
+                        "Business Name": raw[1],
+                        "Subject": "",
+                        "Sent At": raw[2],
+                        "Status": "sent",
+                    }
+                else:
+                    row = {
+                        "To Email": raw[0] if len(raw) > 0 else "",
+                        "Business Name": raw[1] if len(raw) > 1 else "",
+                        "Subject": raw[2] if len(raw) > 2 else "",
+                        "Sent At": raw[3] if len(raw) > 3 else "",
+                        "Status": raw[4] if len(raw) > 4 else "",
+                    }
+                rows.append(row)
+    except Exception:
+        return []
+    return rows
+
 def load_sent_set():
     sent = set()
-    for row in read_csv(SENT_LOG):
+    for row in read_sent_rows():
         e = (row.get("To Email") or "").strip().lower()
         if e: sent.add(e)
     return sent
 
 # ── PIPELINE STATE ────────────────────────────────────────────────
-_pipeline_proc  = None
-_pipeline_stage = "idle"
-_pipeline_lock  = threading.Lock()
+_pipeline_proc      = None
+_pipeline_stage     = "idle"
+_pipeline_lock      = threading.Lock()
+_continuous_stop    = threading.Event()   # set to break the continuous scrape loop
+_continuous_running = False               # True while continuous loop is active
 LIVE_LOG        = Path("/tmp/pipeline_live.log")
+SAMPLES_FILE    = Path("/tmp/email_samples.json")
+APPROVAL_FILE   = LEADS_DIR / ".pending_approval"
+
+# ── ACTIVITY LOG (server-side, survives page refresh) ─────────────
+_activity: list = []
+def log_activity(msg: str, cls: str = ""):
+    _activity.append({"t": datetime.now().strftime("%H:%M:%S"), "msg": msg, "cls": cls})
+    if len(_activity) > 100:
+        _activity.pop(0)
 
 def pipeline_running():
-    global _pipeline_proc
-    if _pipeline_proc and _pipeline_proc.poll() is None:
+    global _continuous_running
+    if _continuous_running:
         return True
+    with _pipeline_lock:
+        if _pipeline_proc and _pipeline_proc.poll() is None:
+            return True
+    # Also detect cron-started pipeline processes
+    try:
+        import psutil
+        for proc in psutil.process_iter(['cmdline']):
+            try:
+                cmd = ' '.join(proc.info['cmdline'] or [])
+                if ('daily_outreach.py' in cmd or 'scrape_maps.py' in cmd or 'extract_emails.py' in cmd) and 'server.py' not in cmd:
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+    except ImportError:
+        try:
+            import subprocess as _sp
+            r = _sp.run(['pgrep', '-f', 'daily_outreach.py'], capture_output=True)
+            if r.returncode == 0:
+                return True
+            r2 = _sp.run(['pgrep', '-f', 'scrape_maps.py'], capture_output=True)
+            if r2.returncode == 0:
+                return True
+        except Exception:
+            pass
     return False
 
 def _stream_proc_to_log(proc, log_path: Path):
@@ -200,8 +270,6 @@ Subject: [subject line]
 
     return variants
 
-APPROVAL_FILE = LEADS_DIR / ".pending_approval"
-
 # ── FASTAPI APP ───────────────────────────────────────────────────
 app = FastAPI(title="Outreach Dashboard")
 
@@ -210,6 +278,7 @@ app = FastAPI(title="Outreach Dashboard")
 def get_stats():
     master = read_csv(MASTER_CSV)
     sent   = load_sent_set()
+    sent_rows = read_sent_rows()
 
     total_collected = len(master)
     total_sent      = len(sent)
@@ -224,12 +293,36 @@ def get_stats():
     raw_pending = sum(1 for r in raw
                       if (r.get("emails","") or "[]") not in ("","[]")
                       and r.get("title",""))
+    raw_scraped = len(raw)  # total businesses scraped (before email extraction)
 
-    sent_today = 0
+    # Count unique emails sent today (deduped to be consistent with total_sent)
+    sent_today_emails = set()
     today = date.today().strftime("%Y-%m-%d")
-    for row in read_csv(SENT_LOG):
+    for row in sent_rows:
         if (row.get("Sent At","") or "").startswith(today):
-            sent_today += 1
+            e = (row.get("To Email") or "").strip().lower()
+            if e:
+                sent_today_emails.add(e)
+    sent_today = len(sent_today_emails)
+
+    running = pipeline_running()
+    stage = _pipeline_stage
+    if running and stage == "idle":
+        # Detect cron stage from live log
+        try:
+            log_lines = LIVE_LOG.read_text(encoding="utf-8") if LIVE_LOG.exists() else ""
+            if "scrape_maps" in log_lines or "Scraping" in log_lines or "running total:" in log_lines or "Query:" in log_lines:
+                stage = "scraping"
+            elif "extract" in log_lines.lower():
+                stage = "extracting"
+            elif "Generating" in log_lines or "Groq" in log_lines:
+                stage = "generating"
+            elif "Sending" in log_lines or "smtp" in log_lines.lower():
+                stage = "sending"
+            else:
+                stage = "running"
+        except Exception:
+            stage = "running"
 
     return {
         "total_collected": total_collected,
@@ -238,8 +331,43 @@ def get_stats():
         "sent_today": sent_today,
         "bad_emails": bad,
         "raw_pending": raw_pending,
-        "pipeline_running": pipeline_running(),
-        "pipeline_stage": _pipeline_stage,
+        "raw_scraped": raw_scraped,
+        "pipeline_running": running,
+        "pipeline_stage": stage,
+    }
+
+@app.get("/api/all")
+def get_all_emails(page: int = 1, limit: int = 100, search: str = ""):
+    master = read_csv(MASTER_CSV)
+    sent = load_sent_set()
+
+    if search:
+        s = search.lower()
+        master = [
+            r for r in master
+            if s in " ".join([
+                r.get("Business Name", ""),
+                r.get("Category", ""),
+                r.get("City", ""),
+                r.get("State", ""),
+                r.get("To Email", ""),
+                r.get("Subject", ""),
+            ]).lower()
+        ]
+
+    total = len(master)
+    start = (page - 1) * limit
+    rows = []
+    for row in master[start:start + limit]:
+        item = dict(row)
+        item["Status"] = "sent" if (row.get("To Email", "").strip().lower() in sent) else "queued"
+        rows.append(item)
+
+    return {
+        "total": total,
+        "page": page,
+        "pages": max(1, (total + limit - 1) // limit),
+        "rows": rows,
     }
 
 # ── API: QUEUE (pending emails) ────────────────────────────────────
@@ -271,16 +399,32 @@ def get_queue(page: int = 1, limit: int = 20, search: str = ""):
     }
 
 # ── API: SENT HISTORY ──────────────────────────────────────────────
+@app.get("/api/sent/dates")
+def get_sent_dates():
+    """Return list of unique send dates (YYYY-MM-DD), newest first."""
+    seen = {}
+    for row in read_sent_rows():
+        raw = (row.get("Sent At") or "").strip()
+        day = raw[:10] if len(raw) >= 10 else None
+        if day and re.match(r'^\d{4}-\d{2}-\d{2}$', day):
+            seen[day] = seen.get(day, 0) + 1
+    dates = sorted(seen.keys(), reverse=True)
+    return {"dates": [{"date": d, "count": seen[d]} for d in dates]}
+
 @app.get("/api/sent")
-def get_sent(page: int = 1, limit: int = 30):
-    rows  = list(reversed(read_csv(SENT_LOG)))
-    total = len(rows)
+def get_sent(page: int = 1, limit: int = 30, date: str = ""):
+    all_rows = list(reversed(read_sent_rows()))
+    if date:
+        all_rows = [r for r in all_rows
+                    if (r.get("Sent At") or "").strip().startswith(date)]
+    total = len(all_rows)
     start = (page-1)*limit
     return {
         "total": total,
         "page": page,
-        "pages": (total+limit-1)//limit,
-        "rows": rows[start:start+limit]
+        "pages": max(1, (total+limit-1)//limit),
+        "rows": all_rows[start:start+limit],
+        "date": date,
     }
 
 # ── API: GENERATE VARIANTS ─────────────────────────────────────────
@@ -356,14 +500,11 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
     if action == "scrape":
         if pipeline_running():
             return {"ok": False, "msg": "Pipeline already running"}
+
         def run_scrape():
-            global _pipeline_proc, _pipeline_stage
-            import random as _random
+            global _pipeline_proc, _pipeline_stage, _continuous_running
+            import random as _random, json as _json, csv as _csv
 
-            _pipeline_stage = "scraping"
-            LIVE_LOG.write_text("")  # clear log
-
-            # Build query file — 25 queries
             CITIES = [
                 ("Charlotte","NC"),("Atlanta","GA"),("Tampa","FL"),("Las Vegas","NV"),
                 ("Portland","OR"),("Minneapolis","MN"),("San Diego","CA"),("Detroit","MI"),
@@ -371,6 +512,9 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
                 ("Kansas City","MO"),("Columbus","OH"),("Indianapolis","IN"),
                 ("Louisville","KY"),("Memphis","TN"),("Richmond","VA"),
                 ("Oklahoma City","OK"),("Salt Lake City","UT"),
+                ("Nashville","TN"),("Denver","CO"),("Austin","TX"),("Seattle","WA"),
+                ("Miami","FL"),("Dallas","TX"),("Houston","TX"),("Chicago","IL"),
+                ("Boston","MA"),("Pittsburgh","PA"),("Cincinnati","OH"),("St. Louis","MO"),
             ]
             CATEGORIES = [
                 "dental clinic","law firm","med spa","real estate agent",
@@ -378,44 +522,114 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
                 "chiropractor","physical therapist","veterinary clinic",
                 "auto repair shop","plumber","mortgage broker","accounting firm",
             ]
-            pairs = [(city, state, cat) for city, state in CITIES for cat in CATEGORIES]
-            _random.shuffle(pairs)
-            queries = [f"{cat} in {city} {state}" for city, state, cat in pairs[:25]]
-            queries_path = LEADS_DIR / "daily_queries.txt"
-            queries_path.write_text("\n".join(queries))
 
-            raw_csv = LEADS_DIR / "leads_raw_new.csv"
-            if raw_csv.exists():
-                raw_csv.unlink()
+            _continuous_stop.clear()
+            _continuous_running = True
+            LIVE_LOG.write_text("")
+            iteration = 0
 
-            # Run scrape_maps.py DIRECTLY — captures all its print() output
-            _pipeline_proc = subprocess.Popen(
-                [PYTHON, str(LEADS_DIR / "scrape_maps.py"),
-                 "--queries", str(queries_path),
-                 "--output",  str(raw_csv)],
-                cwd=str(LEADS_DIR),
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True, bufsize=1
-            )
-            t = threading.Thread(target=_stream_proc_to_log, args=(_pipeline_proc, LIVE_LOG), daemon=True)
-            t.start()
-            _pipeline_proc.wait()
+            def _llog(msg: str):
+                with open(LIVE_LOG, "a", encoding="utf-8") as _f:
+                    _f.write(msg + "\n")
 
-            # Count results
-            count = 0
-            if raw_csv.exists():
+            def _run_proc(cmd, timeout=None):
+                """Run subprocess, stream output to LIVE_LOG, return proc."""
+                proc = subprocess.Popen(
+                    cmd, cwd=str(LEADS_DIR),
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1
+                )
+                with _pipeline_lock:
+                    globals()['_pipeline_proc'] = proc
+                t = threading.Thread(target=_stream_proc_to_log, args=(proc, LIVE_LOG), daemon=True)
+                t.start()
                 try:
-                    with open(raw_csv) as f:
-                        count = max(0, sum(1 for _ in f) - 1)
-                except: pass
-            with open(LIVE_LOG, "a") as f:
-                f.write(f"\n✅ Scrape complete — {count} businesses found\n")
+                    proc.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    _llog("⚠️ Process hit timeout — killed, continuing with partial results")
+                return proc
 
-            _pipeline_stage = "idle"
+            try:
+                while not _continuous_stop.is_set():
+                    iteration += 1
+                    log_activity(f"Continuous scrape — iteration {iteration}", "run")
+                    _llog(f"\n{'='*50}\n🔁 Iteration {iteration} — {datetime.now().strftime('%H:%M:%S')}\n{'='*50}")
+
+                    # ── Step 1: SCRAPE ───────────────────────────────
+                    _pipeline_stage = "scraping"
+                    pairs = [(city, state, cat) for city, state in CITIES for cat in CATEGORIES]
+                    _random.shuffle(pairs)
+                    queries = [f"{cat} in {city} {state}" for city, state, cat in pairs[:25]]
+                    queries_path = LEADS_DIR / "daily_queries.txt"
+                    queries_path.write_text("\n".join(queries))
+
+                    raw_csv = LEADS_DIR / "leads_raw_new.csv"
+                    if raw_csv.exists():
+                        raw_csv.unlink()
+
+                    _llog(f"🔍 Scraping {len(queries)} queries...")
+                    _run_proc([PYTHON, str(LEADS_DIR / "scrape_maps.py"),
+                               "--queries", str(queries_path), "--output", str(raw_csv)],
+                              timeout=3600)
+
+                    if _continuous_stop.is_set():
+                        break
+
+                    raw_count = 0
+                    if raw_csv.exists():
+                        try:
+                            with open(raw_csv) as f:
+                                raw_count = max(0, sum(1 for _ in f) - 1)
+                        except: pass
+                    _llog(f"✅ Scrape done — {raw_count} businesses found")
+
+                    # ── Step 2: EXTRACT EMAILS ───────────────────────
+                    _pipeline_stage = "extracting"
+                    _llog("📧 Extracting emails from business websites...")
+                    _run_proc([PYTHON, str(LEADS_DIR / "extract_emails.py")], timeout=1800)
+
+                    if _continuous_stop.is_set():
+                        break
+
+                    # Count businesses with emails found
+                    email_count = 0
+                    if raw_csv.exists():
+                        try:
+                            with open(raw_csv, newline="", encoding="utf-8") as f:
+                                for row in _csv.DictReader(f):
+                                    e = row.get("emails","")
+                                    if e and e != "[]": email_count += 1
+                        except: pass
+                    _llog(f"✅ Extraction done — {email_count} businesses have emails")
+
+                    # ── Step 3: GENERATE AI EMAILS ───────────────────
+                    _pipeline_stage = "generating"
+                    _llog("✍️ Generating personalized emails (Groq)...")
+                    _run_proc([PYTHON, str(LEADS_DIR / "daily_outreach.py"), "--generate-only"],
+                              timeout=1800)
+
+                    if _continuous_stop.is_set():
+                        break
+
+                    # Count new records in master CSV
+                    try:
+                        master_count = sum(1 for _ in open(MASTER_CSV)) - 1
+                    except: master_count = 0
+                    _llog(f"✅ Iteration {iteration} complete — {master_count} total emails queued")
+                    log_activity(f"Iteration {iteration} done — {master_count} queued", "ok")
+
+            finally:
+                _continuous_running = False
+                _pipeline_stage = "idle"
+                with _pipeline_lock:
+                    globals()['_pipeline_proc'] = None
+                _llog(f"\n⏹ Continuous scrape stopped after {iteration} iteration(s)")
+                log_activity("Continuous scrape stopped", "info")
+
         background_tasks.add_task(run_scrape)
-        return {"ok": True, "msg": "Scraping 25 queries — watch the terminal"}
+        return {"ok": True, "msg": "Continuous scrape started — runs until you press Stop"}
 
     if action == "send":
         if pipeline_running():
@@ -423,8 +637,9 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
         def run_send():
             global _pipeline_proc, _pipeline_stage
             _pipeline_stage = "sending"
+            log_activity("Pipeline started — sending", "run")
             LIVE_LOG.write_text("")
-            send_script = str(LEADS_DIR / "send_emails_batch_475.py")
+            send_script = str(LEADS_DIR / "send_emails.py")
             _pipeline_proc = subprocess.Popen(
                 [PYTHON, send_script], cwd=str(LEADS_DIR),
                 env={**os.environ, "PYTHONUNBUFFERED": "1"},
@@ -434,13 +649,25 @@ def pipeline_action(action: str, background_tasks: BackgroundTasks):
             t = threading.Thread(target=_stream_proc_to_log, args=(_pipeline_proc, LIVE_LOG), daemon=True)
             t.start()
             _pipeline_proc.wait()
+            log_activity("Send complete", "ok")
             _pipeline_stage = "idle"
         background_tasks.add_task(run_send)
         return {"ok": True, "msg": "Send started"}
 
     if action == "stop":
-        if _pipeline_proc and _pipeline_proc.poll() is None:
-            _pipeline_proc.terminate()
+        global _continuous_running
+        stopped_something = False
+        # Signal continuous loop to stop
+        _continuous_stop.set()
+        if _continuous_running:
+            stopped_something = True
+        # Kill any running subprocess
+        with _pipeline_lock:
+            if _pipeline_proc and _pipeline_proc.poll() is None:
+                _pipeline_proc.terminate()
+                stopped_something = True
+        if stopped_something:
+            log_activity("Pipeline stopped by user", "err")
             _pipeline_stage = "idle"
             return {"ok": True, "msg": "Pipeline stopped"}
         return {"ok": False, "msg": "Nothing running"}
@@ -457,7 +684,7 @@ def pipeline_status():
 # ── API: SEND HISTORY (daily breakdown) ──────────────────────────
 @app.get("/api/stats/history")
 def get_history():
-    rows = read_csv(SENT_LOG)
+    rows = read_sent_rows()
     from collections import defaultdict
     import re as _re
     by_day = defaultdict(int)
@@ -472,6 +699,15 @@ def get_history():
 # ── API: SAMPLE EMAILS ─────────────────────────────────────────────
 @app.get("/api/samples")
 def get_samples(n: int = 5):
+    # Return format-specific samples if pipeline generated them
+    if SAMPLES_FILE.exists():
+        try:
+            data = json.loads(SAMPLES_FILE.read_text())
+            if isinstance(data, dict) and data:
+                return {"format_samples": data, "samples": [], "total_pending": 0}
+        except:
+            pass
+    # Fallback: random emails from existing queue
     master = read_csv(MASTER_CSV)
     sent   = load_sent_set()
     pool   = [r for r in master
@@ -480,7 +716,7 @@ def get_samples(n: int = 5):
               and not is_bad_email(r.get("To Email",""))]
     import random as _random
     samples = _random.sample(pool, min(n, len(pool))) if pool else []
-    return {"samples": samples, "total_pending": len(pool)}
+    return {"format_samples": None, "samples": samples, "total_pending": len(pool)}
 
 # ── API: APPROVE BATCH (write approval token, pipeline picks it up) ─
 class ApproveBatchRequest(BaseModel):
@@ -488,21 +724,31 @@ class ApproveBatchRequest(BaseModel):
 
 @app.post("/api/approve-batch")
 def approve_batch(req: ApproveBatchRequest, background_tasks: BackgroundTasks):
-    APPROVAL_FILE.write_text(req.format_id)
-    # If pipeline is not running, trigger send directly
+    format_id = req.format_id or "professional"
+    APPROVAL_FILE.write_text(format_id)
     if not pipeline_running():
-        def run_send():
+        def run_generate_and_send():
             global _pipeline_proc, _pipeline_stage
-            _pipeline_stage = "sending"
+            LIVE_LOG.unlink(missing_ok=True)
+            _pipeline_stage = "generating"
             _pipeline_proc = subprocess.Popen(
-                [PYTHON, str(LEADS_DIR / "send_emails_batch_475.py")],
-                cwd=str(LEADS_DIR)
+                [PYTHON, str(LEADS_DIR / "daily_outreach.py"),
+                 "--generate-and-send", format_id],
+                cwd=str(LEADS_DIR),
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True, bufsize=1
             )
+            t = threading.Thread(target=_stream_proc_to_log,
+                                 args=(_pipeline_proc, LIVE_LOG), daemon=True)
+            t.start()
             _pipeline_proc.wait()
             _pipeline_stage = "idle"
             if APPROVAL_FILE.exists(): APPROVAL_FILE.unlink()
-        background_tasks.add_task(run_send)
-        return {"ok": True, "msg": "Approved — send started"}
+            if SAMPLES_FILE.exists(): SAMPLES_FILE.unlink()  # clear samples after send
+        background_tasks.add_task(run_generate_and_send)
+        return {"ok": True, "msg": f"Approved — generating {format_id} emails and sending"}
     return {"ok": True, "msg": "Approval saved — pipeline will pick it up"}
 
 # ── API: APPROVAL STATUS ───────────────────────────────────────────
@@ -531,6 +777,7 @@ async def stream_logs():
         yield f"data: {json.dumps({'line': '--- Stream connected ---', 'type': 'info'})}\n\n"
         while True:
             await asyncio.sleep(0.5)
+            got_data = False
             if LIVE_LOG.exists():
                 try:
                     with open(LIVE_LOG, "r", encoding="utf-8") as f:
@@ -538,6 +785,7 @@ async def stream_logs():
                         new_data = f.read()
                         pos = f.tell()
                     if new_data:
+                        got_data = True
                         idle_ticks = 0
                         for line in new_data.splitlines():
                             line = line.strip()
@@ -558,7 +806,9 @@ async def stream_logs():
             else:
                 idle_ticks += 1
 
-            if not pipeline_running():
+            # When the pipeline has stopped and there's no new data, count down faster
+            # but only increment once total per tick (not twice) to preserve the ~60s window
+            if not got_data and not pipeline_running():
                 idle_ticks += 1
 
             if idle_ticks >= max_idle:
